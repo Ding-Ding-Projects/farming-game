@@ -1,0 +1,1838 @@
+/*
+ * Sprout Hollow — shell structure.
+ *
+ * DESIGN.md sections 3, 4 and 6 rendered in CSS: carved wood, hard 2px shadows offset
+ * down-right and never blurred, one-pixel notched corners, no border-radius anywhere,
+ * no gradient except the sky, light from the upper left always.
+ *
+ * Every colour, size and duration comes from `tokens.css`. There is no literal colour
+ * in this file.
+ *
+ * Two ways in. Components can use the `.sh-*` classes, or they can just emit correct
+ * HTML: `button`, `input`, `select`, `table`, `dialog`, `[popover]`, `[role="tab"]`,
+ * `[role="menuitem"]` and friends are styled as elements, so a control is dressed the
+ * moment it is real. Control rules deliberately do not require a `.sh-app` ancestor, so
+ * a dialog or popover appended to `document.body` still looks like the rest of the app.
+ *
+ * Three things to know before nesting:
+ *   - `.sh-panel`, `.sh-popover`, `dialog` and `.sh-btn` carry `filter: drop-shadow(...)`
+ *     for the hard shadow, which makes them a containing block for positioned
+ *     descendants. `position: fixed` layers — the notification stack above all — belong
+ *     on `.sh-app` or `body`, never inside a panel.
+ *   - A notched element clips its own outline and any outer box-shadow away. The frame
+ *     is therefore built inward (ink border, bark ring, lit inner edge) and focus is an
+ *     inset two-tone ring. Nothing here removes an outline without putting one back.
+ *   - The focus section is last on purpose: it must out-rank every component state.
+ */
+
+/* ========================================================================== */
+/* 1. Reset and roots                                                          */
+/* ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--sh-bg-app);
+  color: var(--sh-fg-on-dark);
+  font-family: var(--sh-font-ui);
+  font-size: var(--sh-text-md);
+  line-height: var(--sh-leading);
+}
+
+/*
+ * index.html centres a bare canvas in a flex body. Once the shell is mounted the app
+ * owns the whole viewport instead. `:has()` keeps this winning whatever the stylesheet
+ * order, and leaves the canvas-only page untouched.
+ */
+html:has(.sh-app),
+body:has(.sh-app) {
+  display: block;
+  align-items: initial;
+  justify-content: initial;
+  overflow: hidden;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Pixel art never smooths, and the shell's display type is drawn on a canvas. */
+canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
+::selection {
+  background: var(--sh-color-lantern);
+  color: var(--sh-color-ink);
+}
+
+.sh-visually-hidden,
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Skip link: off-screen until focused, then a real control in the corner. */
+.sh-skip {
+  position: absolute;
+  top: var(--sh-space-2);
+  left: var(--sh-space-2);
+  z-index: var(--sh-z-dialog);
+  transform: translateY(-300%);
+  transition: transform var(--sh-dur-fast) var(--sh-ease-smooth);
+}
+
+.sh-skip:focus-visible {
+  transform: translateY(0);
+}
+
+/* ========================================================================== */
+/* 2. The application grid                                                     */
+/* ========================================================================== */
+
+.sh-app {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--sh-bg-app);
+  color: var(--sh-fg-on-dark);
+  font-family: var(--sh-font-ui);
+  font-size: var(--sh-text-md);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Anything readable or copyable opts back into selection. */
+.sh-app :is(p, li, td, th, code, pre, input, textarea, .sh-selectable) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.sh-main {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--sh-bg-app);
+}
+
+.sh-tabpanel,
+[role='tabpanel'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sh-space-3);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--sh-space-3);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* The Farm tab hosts the canvas and must not scroll it. */
+.sh-tabpanel--canvas {
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  overflow: hidden;
+}
+
+.sh-statusbar {
+  display: flex;
+  gap: var(--sh-space-3);
+  align-items: center;
+  min-height: var(--sh-target-min);
+  padding: var(--sh-space-1) var(--sh-space-3);
+  background: var(--sh-bg-chrome);
+  color: var(--sh-fg-on-dark);
+  font-size: var(--sh-text-xs);
+  box-shadow: inset 0 var(--sh-px) 0 0 var(--sh-color-ink);
+}
+
+/* Layout helpers, all intrinsic, so a 640px window needs no special case. */
+.sh-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sh-space-2);
+  align-items: center;
+  min-width: 0;
+}
+
+.sh-row--between {
+  justify-content: space-between;
+}
+
+.sh-col,
+.sh-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sh-space-2);
+  min-width: 0;
+}
+
+.sh-stack--loose {
+  gap: var(--sh-space-4);
+}
+
+.sh-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+  gap: var(--sh-space-3);
+  min-width: 0;
+}
+
+.sh-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sh-truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sh-content {
+  width: 100%;
+  max-width: var(--sh-content-max);
+  min-width: 0;
+}
+
+.sh-scroll {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* ========================================================================== */
+/* 3. Typography                                                               */
+/* ========================================================================== */
+
+.sh-app :is(h1, h2, h3, h4) {
+  margin: 0;
+  font-weight: 700;
+  line-height: var(--sh-leading-tight);
+  letter-spacing: var(--sh-tracking-caps);
+  text-transform: uppercase;
+}
+
+.sh-app h1 { font-size: var(--sh-text-xl); }
+.sh-app h2 { font-size: var(--sh-text-lg); }
+.sh-app h3 { font-size: var(--sh-text-md); }
+.sh-app h4 { font-size: var(--sh-text-sm); }
+
+.sh-app p {
+  margin: 0;
+}
+
+.sh-bullets {
+  margin: 0;
+  padding-left: var(--sh-space-5);
+}
+
+.sh-title-caps {
+  font-size: var(--sh-text-sm);
+  font-weight: 700;
+  letter-spacing: var(--sh-tracking-caps);
+  text-transform: uppercase;
+}
+
+.sh-muted { color: var(--sh-fg-muted); }
+.sh-ok { color: var(--sh-fg-ok); }
+.sh-info { color: var(--sh-fg-info); }
+.sh-accent { color: var(--sh-fg-accent); }
+.sh-danger { color: var(--sh-fg-danger); }
+
+/*
+ * Facts — numbers, names, paths, key bindings, error codes — are set in the mono face,
+ * never uppercased and never translated, so an interpolated parameter always reads as
+ * itself however the surrounding voice is worded.
+ */
+code,
+kbd,
+samp,
+pre,
+.sh-fact {
+  font-family: var(--sh-font-mono);
+  font-size: 0.95em;
+  text-transform: none;
+}
+
+code,
+.sh-fact {
+  padding: 0 var(--sh-space-1);
+  background: var(--sh-bg-field);
+  color: var(--sh-fg);
+  box-shadow: inset 0 0 0 var(--sh-px) var(--sh-color-bark);
+}
+
+kbd,
+.sh-kbd {
+  display: inline-block;
+  min-width: var(--sh-target-min);
+  padding: 0 var(--sh-space-2);
+  background: var(--sh-bg-field);
+  color: var(--sh-fg);
+  font-size: var(--sh-text-xs);
+  line-height: calc(var(--sh-target-min) - var(--sh-px2));
+  text-align: center;
+  box-shadow: inset 0 0 0 var(--sh-px) var(--sh-color-bark), var(--sh-hilite);
+  clip-path: var(--sh-notch);
+}
+
+pre {
+  margin: 0;
+  padding: var(--sh-space-2);
+  background: var(--sh-bg-field);
+  color: var(--sh-fg);
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: inset 0 0 0 var(--sh-px) var(--sh-color-bark);
+}
+
+.sh-app a {
+  color: var(--sh-fg-accent);
+  text-decoration-thickness: var(--sh-px);
+  text-underline-offset: var(--sh-px2);
+}
+
+.sh-app a:hover {
+  background: var(--sh-color-lantern);
+  color: var(--sh-color-ink);
+}
+
+/* ========================================================================== */
+/* 4. Panels — DESIGN.md 6                                                     */
+/* ========================================================================== */
+
+/*
+ * "3 px bark frame, 1 px ink outline outside it, 1 px grassLit-tinted highlight inside
+ * the top and left edges only. Interior is parchment, with a 1 px soil dither along the
+ * bottom edge to seat it. Corners are notched by one pixel. A hard 2 px shadow offset
+ * down-right, no blur."
+ *
+ * Built inward because the notch clips anything drawn outside the border box:
+ *   border      1px ink        the outline
+ *   shadow #1   3px bark       the frame
+ *   shadow #2   1px hilite     the lit top and left edges, painted under the bark ring
+ *                              so only the pixel just inside it shows
+ *   padding     4px            reserves the frame so content never sits on it
+ */
+.sh-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 var(--sh-px2) var(--sh-px2) 0;
+  padding: var(--sh-px4);
+  background: var(--sh-bg-panel);
+  color: var(--sh-fg);
+  border: var(--sh-px) solid var(--sh-color-ink);
+  box-shadow:
+    inset 0 0 0 var(--sh-px3) var(--sh-bg-wood),
+    inset var(--sh-px4) var(--sh-px4) 0 0 var(--sh-frame-hilite);
+  clip-path: var(--sh-notch);
+  filter: var(--sh-shadow-hard);
+}
+
+/* The soil dither along the interior's bottom edge, seating the panel. */
+.sh-panel::after {
+  content: '';
+  position: absolute;
+  inset: auto var(--sh-px3) var(--sh-px3) var(--sh-px3);
+  height: var(--sh-px);
+  background: var(--sh-dither-soil) 0 0 / var(--sh-dither-cell);
+  pointer-events: none;
+}
+
+/* The same carving at button weight: 1px bark, no separate outline. */
+.sh-panel--thin {
+  padding: var(--sh-px2);
+  border-color: var(--sh-color-bark);
+  box-shadow: var(--sh-hilite);
+  filter: var(--sh-shadow-hard-sm);
+}
+
+.sh-panel--thin::after {
+  inset: auto var(--sh-px) var(--sh-px) var(--sh-px);
+}
+
+/* A panel that fills its tab and scrolls its body rather than the page. */
+.sh-panel--fill {
+  flex: 1 1 auto;
+  height: 100%;
+}
+
+.sh-panel__title {
+  display: flex;
+  gap: var(--sh-space-2);
+  align-items: center;
+  min-height: var(--sh-target-min);
+  padding: var(--sh-space-2) var(--sh-space-3);
+  background: var(--sh-bg-wood);
+  color: var(--sh-fg-on-dark-strong);
+  font-size: var(--sh-text-sm);
+  font-weight: 700;
+  letter-spacing: var(--sh-tracking-caps);
+  text-transform: uppercase;
+  box-shadow: var(--sh-hilite), inset 0 calc(-1 * var(--sh-px)) 0 0 var(--sh-color-ink);
+}
+
+.sh-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--sh-space-3);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.sh-panel__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sh-space-2);
+  justify-content: flex-end;
+  padding: var(--sh-space-2) var(--sh-space-3);
+  box-shadow: inset 0 var(--sh-px) 0 0 var(--sh-color-soil);
+}
+
+/* A framed group inside a panel: settings sections, crop entries, log blocks. */
+.sh-card,
+fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: var(--sh-space-3);
+  background: var(--sh-bg-panel);
+  border: var(--sh-px) solid var(--sh-color-bark);
+  box-shadow: var(--sh-hilite);
+  clip-path: var(--sh-notch);
+}
+
+legend {
+  padding: 0 var(--sh-space-2);
+  font-size: var(--sh-text-sm);
+  font-weight: 700;
+  letter-spacing: var(--sh-tracking-caps);
+  text-transform: uppercase;
+}
+
+.sh-separator,
+hr {
+  height: var(--sh-px);
+  margin: var(--sh-space-2) 0;
+  border: 0;
+  background: var(--sh-color-bark);
+}
+
+.sh-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sh-space-2);
+  align-items: center;
+  min-width: 0;
+  padding: var(--sh-space-2);
+  background: var(--sh-bg-panel);
+  box-shadow: inset 0 calc(-1 * var(--sh-px)) 0 0 var(--sh-color-bark);
+}
+
+/* Collapsible groups: settings sections, almanac chapters, tab groups. */
+details {
+  min-width: 0;
+}
+
+summary {
+  display: flex;
+  gap: var(--sh-space-2);
+  align-items: center;
+  min-height: var(--sh-target-min);
+  padding: var(--sh-space-1) var(--sh-space-2);
+  font-size: var(--sh-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+/* A drawn marker, not an icon font: a clipped square that turns when open. */
+summary::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  transition: transform var(--sh-dur-fast) var(--sh-ease);
+}
+
+details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+summary:hover {
+  background: var(--sh-surface-hover);
+}
+
+/* ========================================================================== */
+/* 5. Buttons — DESIGN.md 6                                                    */
+/* ========================================================================== */
+
+/*
+ * "Buttons are the same frame at 1 px, filling with lantern on hover and inverting to
+ * ink-on-cream when held." Held also drops the hard shadow and moves the button down
+ * into it, so a press is physical and not a colour change alone.
+ */
+button,
+.sh-btn,
+[role='button'] {
+  display: inline-flex;
+  gap: var(--sh-space-2);
+  align-items: center;
+  justify-content: center;
+  min-width: var(--sh-target-min);
+  min-height: var(--sh-target-min);
+  padding: var(--sh-space-1) var(--sh-space-3);
+  background: var(--sh-bg-panel);
+  color: var(--sh-fg);
+  border: var(--sh-px) solid var(--sh-color-bark);
+  font: inherit;
+  font-size: var(--sh-text-sm);
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: var(--sh-hilite);
+  clip-path: var(--sh-notch);
+  filter: var(--sh-shadow-hard-sm);
+  transition:
+    background-color var(--sh-dur-instant) var(--sh-ease),
+    color var(--sh-dur-instant) var(--sh-ease),
+    transform var(--sh-dur-instant) var(--sh-ease),
+    filter var(--sh-dur-instant) var(--sh-ease);
+}
+
+button:hover:not(:disabled, [aria-disabled='true']),
+.sh-btn:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--sh-color-lantern);
+  color: var(--sh-color-ink);
+}
+
+button:is(:active, [data-sh-held='true']):not(:disabled, [aria-disabled='true']),
+.sh-btn:is(:active, [data-sh-held='true']):not(:disabled, [aria-disabled='true']) {
+  background: var(--sh-color-cream);
+  color: var(--sh-color-ink);
+  transform: translate(var(--sh-px), var(--sh-px));
+  filter: none;
+}
+
+/* Toggles and disclosures hold the lantern fill while they are on. */
+button:is([aria-pressed='true'], [aria-expanded='true'], [aria-checked='true']),
+.sh-btn.is-selected {
+  background: var(--sh-color-lantern);
+  color: var(--sh-color-ink);
+  box-shadow: inset 0 0 0 var(--sh-px) var(--sh-color-ink);
+}
+
+button:disabled,
+button[aria-disabled='true'],
+.sh-btn:disabled,
+.sh-btn[aria-disabled='true'] {
+  background: var(--sh-bg-panel);
+  color: var(--sh-fg-disabled);
+  border-color: var(--sh-color-dusk);
+  cursor: not-allowed;
+  box-shadow: none;
+  filter: none;
+}
+
+/* Primary: the lantern fill is the resting state — ink on lantern at 8.39:1. */
+.sh-btn--primary {
+  background: var(--sh-fill-accent);
+  color: var(--sh-color-ink);
+  border-color: var(--sh-color-ink);
+}
+
+.sh-btn--primary:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--sh-fill-lantern-lit);
+}
+
+/*
+ * Danger: berry can carry neither ink (3.70:1) nor cream (4.04:1) as text, so the
+ * resting state is the berry-shaded label and frame on parchment at 5.04:1, and the
+ * hover fill is the darkened berry with cream on it at 6.14:1.
+ */
+.sh-btn--danger {
+  color: var(--sh-fg-danger);
+  border-color: var(--sh-fg-danger);
+}
+
+.sh-btn--danger:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--sh-fill-danger);
+  color: var(--sh-color-cream);
+}
+
+.sh-btn--danger:active:not(:disabled, [aria-disabled='true']) {
+  background: var(--sh-color-cream);
+  color: var(--sh-fg-danger);
+}
+
+/* Ghost: no frame until it is wanted. Still a full-size target. */
+.sh-btn--ghost {
+  background: transparent;
+  color: inherit;
+  border-color: transparent;
+  box-shadow: none;
+  filter: none;
+}
+
+.sh-btn--ghost:hover:not(:disabled, [aria-disabled='true']) {
+  background: var(--sh-color-lantern);
+  color: var(--sh-color-ink);
+  border-color: var(--sh-color-bark);
+}
+
+/* Square control for a single drawn glyph. Never below the minimum target. */
+.sh-btn--icon {
+  width: var(--sh-target-min);
+  min-width: var(--sh-target-min);
+  padding: 0;
+}
+
+.sh-btn--wide {
+  width: 100%;
+}
+
+.sh-btn-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--sh-space-1);
+  min-width: 0;
+}
+
+/* ========================================================================== */
+/* 6. Fields                                                                   */
+/* ========================================================================== */
+
+.sh-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sh-space-1);
+  min-width: 0;
+}
+
+label,
+.sh-label {
+  font-size: var(--sh-text-sm);
+  font-weight: 700;
+}
+
+.sh-hint {
+  color: var(--sh-fg-muted);
+  font-size: var(--sh-text-xs);
+  font-weight: 400;
+}
+
+.sh-error {
+  color: var(--sh-fg-danger);
+  font-size: var(--sh-text-xs);
+  font-weight: 700;
+}
+
+/* Sunken: light still falls from the upper left, so the shade sits top-left. */
+input,
+textarea,
+select,
+.sh-input {
+  min-width: 0;
+  min-height: var(--sh-target-min);
+  padding: var(--sh-space-1) var(--sh-space-2);
+  background: var(--sh-bg-field);
+  color: var(--sh-fg);
+  border: var(--sh-px) solid var(--sh-color-bark);
+  font: inherit;
+  font-size: var(--sh-text-sm);
+  box-shadow: var(--sh-sunk);
+  clip-path: var(--sh-notch);
+}
+
+textarea {
+  min-height: calc(var(--sh-space-7) * 2);
+  font-family: var(--sh-font-mono);
+  resize: vertical;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--sh-fg-disabled); /* 6.17:1 on cream */
+  opacity: 1;
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  background: var(--sh-bg-panel);
+  color: var(--sh-fg-disabled);
+  border-color: var(--sh-color-dusk);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+input[aria-invalid='true'],
+textarea[aria-invalid='true'] {
+  border-color: var(--sh-fg-danger);
+  box-shadow: inset 0 0 0 var(--sh-px) var(--sh-fg-danger);
+}
+
+input[type='search']::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* A bare select keeps its own caret; `.sh-select` wraps one to draw ours. */
+select {
+  color-scheme: light;
+  cursor: pointer;
+}
+
+.sh-select {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.sh-select > select {
+  width: 100%;
+  padding-right: var(--sh-space-6);
+  appearance: none;
+}
+
+.sh-select::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: var(--sh-space-2);
+  width: 0.5rem;
+  height: 0.3125rem;
+  background: var(--sh-color-ink);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* --- checkbox and radio: squares, because nothing here is ever rounded ----- */
+
+input[type='checkbox'],
+input[type='radio'] {
+  flex: 0 0 auto;
+  width: var(--sh-target-min);
+  height: var(--sh-target-min);
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  cursor: pointer;
+}
+
+input[type='checkbox']:checked {
+  background: var(--sh-color-ink);
+  box-shadow: inset 0 0 0 var(--sh-px3) var(--sh-color-lantern);
+}
+
+input[type='checkbox']:indeterminate {
+  background: var(--sh-color-lantern);
+  box-shadow: inset 0 0 0 var(--sh-px3) var(--sh-color-ink);
+}
+
+/* The radio's mark is a small centred dot — never the checkbox's filled block. */
+input[type='radio']:checked {
+  background: var(--sh-color-ink);
+  box-shadow: inset 0 0 0 calc(var(--sh-px) * 9) var(--sh-color-lantern);
+}
+
+input[type='checkbox']:disabled,
+input[type='radio']:disabled {
+  box-shadow: none;
+}
+
+/* A box and its label behave as one target, and the whole row is at least 24px tall. */
+.sh-check {
+  display: flex;
+  gap: var(--sh-space-2);
+  align-items: center;
+  min-width: 0;
+  min-height: var(--sh-target-min);
+  padding: var(--sh-space-1);
+  cursor: pointer;
+}
+
+.sh-check:hover {
+  background: var(--sh-surface-hover);
+}
+
+/* --- switch: a real button with role="switch" ------------------------------ */
+
+[role='switch'] {
+  width: calc(var(--sh-target-min) * 2);
+  min-width: calc(var(--sh-target-min) * 2);
+  padding: 0;
+  background: var(--sh-bg-field);
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* The knob is sized absolutely: a percentage height against an auto-height track
+   resolves to nothing, and an invisible knob is a switch with no state. */
+[role='switch']::before {
+  content: '';
+  flex: 0 0 auto;
+  width: calc(var(--sh-target-min) - var(--sh-px2));
+  height: calc(var(--sh-target-min) - var(--sh-px2));
+  margin: var(--sh-px);
+  background: var(--sh-color-bark);
+  transition: transform var(--sh-dur-fast) var(--sh-ease);
+}
+
+[role='switch'][aria-checked='true'] {
+  background: var(--sh-color-lantern);
+}
+
+[role='switch'][aria-checked='true']::before {
+  background: var(--sh-color-ink);
+  transform: translateX(100%);
+}
+
+/* --- range ----------------------------------------------------------------- */
+
+input[type='range'] {
+  width: 100%;
+  height: var(--sh-target-min);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  clip-path: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: var(--sh-px4);
+  background: var(--sh-color-bark);
+  box-shadow: inset var(--sh-px) var(--sh-px) 0 0 var(--sh-color-soil-wet);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  width: max(1rem, 16px);
+  height: var(--sh-target-min);
+  margin-top: calc((var(--sh-px4) - var(--sh-target-min)) / 2);
+  background: var(--sh-color-parchment);
+  border: var(--sh-px) solid var(--sh-color-ink);
+  box-shadow: var(--sh-hilite);
+  appearance: none;
+}
+
+input[type='range']:hover::-webkit-slider-thumb {
+  background: var(--sh-color-lantern);
+}
+
+input[type='range']::-moz-range-track {
+  height: var(--sh-px4);
+  background: var(--sh-color-bark);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: max(1rem, 16px);
+  height: var(--sh-target-min);
+  background: var(--sh-color-parchment);
+  border: var(--sh-px) solid var(--sh-color-ink);
+  border-radius: 0;
+}
+
+/* --- progress -------------------------------------------------------------- */
+
+progress {
+  width: 100%;
+  height: max(0.5rem, 8px);
+  background: var(--sh-color-bark);
+  border: var(--sh-px) solid var(--sh-color-ink);
+  appearance: none;
+}
+
+progress::-webkit-progress-bar {
+  background: var(--sh-color-bark);
+}
+
+progress::-webkit-progress-value {
+  background: var(--sh-color-lantern);
+}
+
+progress::-moz-progress-bar {
+  background: var(--sh-color-lantern);
+}
+
+/* ========================================================================== */
+/* 7. Search fields                                                            */
+/* ========================================================================== */
+
+.sh-searchfield {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sh-space-1);
+  align-items: center;
+  min-width: 0;
+}
+
+.sh-searchfield__input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.sh-searchfield__count {
+  color: var(--sh-fg-muted);
+  font-family: var(--sh-font-mono);
+  font-size: var(--sh-text-xs);
+  white-space: nowrap;
+}
+
+.sh-searchfield[data-sh-invalid='true'] .sh-searchfield__input {
+  border-color: var(--sh-fg-danger);
+  box-shadow: inset 0 0 0 var(--sh-px) var(--sh-fg-danger);
+}
+
+mark,
+.sh-mark {
+  background: var(--sh-color-lantern);
+  color: var(--sh-color-ink);
+}
+
+/* A capture group inside a match preview: framed rather than merely tinted. */
+.sh-mark--group {
+  background: var(--sh-surface-hover);
+  color: var(--sh-color-ink);
+  box-shadow: inset 0 0 0 var(--sh-px) var(--sh-fg-accent);
+}
+
+.sh-empty {
+  padding: var(--sh-space-4);
+  color: var(--sh-fg-muted);
+  text-align: center;
+}
+
+/* ========================================================================== */
+/* 8. Popovers, menus and listboxes                                            */
+/* ========================================================================== */
+
+.sh-popover,
+[popover] {
+  position: absolute;
+  z-index: var(--sh-z-popover);
+  width: max-content;
+  max-width: min(var(--sh-popover-w), calc(100vw - var(--sh-space-4)));
+  max-height: min(24rem, calc(100dvh - var(--sh-space-7)));
+  margin: 0;
+  padding: var(--sh-space-2);
+  background: var(--sh-bg-panel);
+  color: var(--sh-fg);
+  border: var(--sh-px) solid var(--sh-color-ink);
+  overflow: auto;
+  overscroll-behavior: contain;
+  box-shadow:
+    inset 0 0 0 var(--sh-px2) var(--sh-bg-wood),
+    inset var(--sh-px3) var(--sh-px3) 0 0 var(--sh-frame-hilite);
+  clip-path: var(--sh-notch);
+  filter: var(--sh-shadow-hard);
+}
+
+.sh-popover--wide {
+  max-width: min(32rem, calc(100vw - var(--sh-space-4)));
+}
+
+[role='menu'],
+[role='listbox'],
+.sh-menu,
+.sh-listbox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sh-px);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[role='menuitem'],
+[role='menuitemcheckbox'],
+[role='menuitemradio'],
+[role='option'],
+.sh-menuitem,
+.sh-option {
+  display: flex;
+  gap: var(--sh-space-2);
+  align-items: center;
+  min-width: 0;
+  min-height: var(--sh-target-min);
+  padding: var(--sh-space-1) var(--sh-space-2);
+  background: transparent;
+  color: var(--sh-fg);
+  border: 0;
+  font-size: var(--sh-text-sm);
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+  clip-path: none;
+  filter: none;
+}
+
+[role='menuitem']:hover,
+[role='option']:hover,
+.sh-menuitem:hover,
+.sh-option:hover {
+  background: var(--sh-surface-hover);
+  color: var(--sh-fg);
+}
+
+[role='option'][aria-selected='true'],
+[role='menuitemradio'][aria-checked='true'],
+[role='menuitemcheckbox'][aria-checked='true'],
+.sh-option.is-active {
+  background: var(--sh-color-lantern);
+  color: var(--sh-color-ink);
+  font-weight: 700;
+  box-shadow: inset var(--sh-px2) 0 0 0 var(--sh-color-ink);
+}
+
+[role='separator'] {
+  height: var(--sh-px);
+  margin: var(--sh-space-1) 0;
+  background: var(--sh-color-bark);
+}
+
+[role='menuitem'][aria-disabled='true'],
+[role='option'][aria-disabled='true'] {
+  color: var(--sh-fg-disabled);
+  cursor: not-allowed;
+}
+
+/* ========================================================================== */
+/* 9. Dialogs — the only blocking surface                                      */
+/* ========================================================================== */
+
+dialog,
+.sh-dialog {
+  width: min(var(--sh-dialog-w), calc(100vw - var(--sh-space-6)));
+  max-width: calc(100vw - var(--sh-space-6));
+  max-height: calc(100dvh - var(--sh-space-6));
+  padding: var(--sh-px4);
+  background: var(--sh-bg-panel);
+  color: var(--sh-fg);
+  border: var(--sh-px) solid var(--sh-color-ink);
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 var(--sh-px3) var(--sh-bg-wood),
+    inset var(--sh-px4) var(--sh-px4) 0 0 var(--sh-frame-hilite);
+  clip-path: var(--sh-notch);
+  filter: var(--sh-shadow-lift);
+}
+
+/* Not 50% black: a shadow wash, so the panel still sits on a lit world. */
+dialog::backdrop {
+  background: var(--sh-color-shadow);
+  opacity: var(--sh-backdrop-alpha);
+}
+
+.sh-dialog__title {
+  display: flex;
+  gap: var(--sh-space-2);
+  align-items: center;
+  min-height: var(--sh-target-min);
+  padding: var(--sh-space-2) var(--sh-space-3);
+  background: var(--sh-bg-wood);
+  color: var(--sh-fg-on-dark-strong);
+  font-size: var(--sh-text-sm);
+  font-weight: 700;
+  letter-spacing: var(--sh-tracking-caps);
+  text-transform: uppercase;
+  box-shadow: var(--sh-hilite), inset 0 calc(-1 * var(--sh-px)) 0 0 var(--sh-color-ink);
+}
+
+.sh-dialog__body {
+  max-height: 60dvh;
+  padding: var(--sh-space-3);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.sh-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sh-space-2);
+  justify-content: flex-end;
+  padding: var(--sh-space-2) var(--sh-space-3);
+  box-shadow: inset 0 var(--sh-px) 0 0 var(--sh-color-soil);
+}
+
+/* ========================================================================== */
+/* 10. Tables and lists                                                        */
+/* ========================================================================== */
+
+.sh-table-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+table,
+.sh-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--sh-text-sm);
+  text-align: left;
+}
+
+caption {
+  padding-bottom: var(--sh-space-2);
+  color: var(--sh-fg-muted);
+  font-size: var(--sh-text-xs);
+  text-align: left;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  z-index: var(--sh-z-sticky);
+  padding: var(--sh-space-2);
+  background: var(--sh-bg-panel);
+  color: var(--sh-fg);
+  font-size: var(--sh-text-xs);
+  font-weight: 700;
+  letter-spacing: var(--sh-tracking-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: inset 0 calc(-1 * var(--sh-px2)) 0 0 var(--sh-color-bark);
+}
+
+td {
+  padding: var(--sh-space-2);
+  vertical-align: top;
+  box-shadow: inset 0 calc(-1 * var(--sh-px)) 0 0 var(--sh-color-bark);
+}
+
+tbody tr:nth-child(even) {
+  background: var(--sh-surface-stripe);
+}
+
+tbody tr:hover {
+  background: var(--sh-surface-hover);
+}
+
+tbody tr[aria-selected='true'] {
+  background: var(--sh-color-lantern);
+  color: var(--sh-color-ink);
+}
+
+.sh-num {
+  font-family: var(--sh-font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.sh-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sh-px);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sh-list__item {
+  display: flex;
+  gap: var(--sh-space-2);
+  align-items: center;
+  min-width: 0;
+  min-height: var(--sh-target-min);
+  padding: var(--sh-space-2);
+  box-shadow: inset 0 calc(-1 * var(--sh-px)) 0 0 var(--sh-color-bark);
+}
+
+.sh-list__item:nth-child(even) {
+  background: var(--sh-surface-stripe);
+}
+
+.sh-badge,
+.sh-tag {
+  display: inline-flex;
+  gap: var(--sh-space-1);
+  align-items: center;
+  min-height: max(1.125rem, 18px);
+  padding: 0 var(--sh-space-2);
+  background: var(--sh-bg-wood);
+  color: var(--sh-fg-on-dark-strong);
+  font-size: var(--sh-text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+  clip-path: var(--sh-notch);
+}
+
+.sh-badge--accent {
+  background: var(--sh-fill-accent);
+  color: var(--sh-color-ink);
+}
+
+.sh-badge--danger {
+  background: var(--sh-fill-danger);
+  color: var(--sh-color-cream);
+}
+
+/* ========================================================================== */
+/* 11. The notification stack                                                  */
+/* ========================================================================== */
+
+.sh-notify-stack {
+  position: fixed;
+  top: calc(var(--sh-titlebar-h) + var(--sh-tab-h) + var(--sh-space-2));
+  right: var(--sh-space-2);
+  z-index: var(--sh-z-notify);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sh-space-2);
+  width: min(var(--sh-notify-w), calc(100vw - var(--sh-space-4)));
+  /*
+   * Capped at 60% of the window as well as the space below the chrome: at 200% in a
+   * 640px window three notes would otherwise cover the app they are reporting on.
+   * Past the cap the stack scrolls.
+   */
+  max-height: min(
+    60dvh,
+    calc(100dvh - var(--sh-titlebar-h) - var(--sh-tab-h) - var(--sh-space-5))
+  );
+  overflow: hidden auto;
+  /* Never blocks the app behind it; each note takes its own pointer events back. */
+  pointer-events: none;
+}
+
+.sh-note {
+  display: grid;
+  grid-template-columns: var(--sh-px4) minmax(0, 1fr) auto;
+  gap: var(--sh-space-2);
+  align-items: start;
+  padding: var(--sh-px3) var(--sh-space-2) var(--sh-px3) var(--sh-px3);
+  background: var(--sh-bg-panel);
+  color: var(--sh-fg);
+  border: var(--sh-px) solid var(--sh-color-ink);
+  box-shadow: var(--sh-hilite);
+  clip-path: var(--sh-notch);
+  filter: var(--sh-shadow-hard);
+  pointer-events: auto;
+  /* Movement only. A note that never finished fading — a throttled window, a paused
+     compositor — would be a low-contrast message, so opacity is never animated. */
+  animation: sh-note-in var(--sh-dur-base) var(--sh-ease) both;
+}
+
+/* The kind is a bar down the left edge — and the component still names it in text. */
+.sh-note::before {
+  content: '';
+  align-self: stretch;
+  background: var(--sh-fg-info);
+}
+
+.sh-note.is-ok::before { background: var(--sh-fg-ok); }
+.sh-note.is-warn::before { background: var(--sh-fg-accent); }
+.sh-note.is-fail::before { background: var(--sh-fill-danger); }
+.sh-note.is-progress::before { background: var(--sh-fg-info); }
+
+.sh-note__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sh-space-1);
+  min-width: 0;
+  padding: var(--sh-space-1) 0;
+}
+
+.sh-note__title {
+  font-size: var(--sh-text-sm);
+  font-weight: 700;
+}
+
+.sh-note__text {
+  font-size: var(--sh-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.sh-note.is-fail .sh-note__title {
+  color: var(--sh-fg-danger);
+}
+
+@keyframes sh-note-in {
+  from {
+    transform: translateX(var(--sh-space-4));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* ========================================================================== */
+/* 12. Title bar                                                               */
+/* ========================================================================== */
+
+.sh-titlebar {
+  display: flex;
+  gap: var(--sh-space-2);
+  align-items: center;
+  min-width: 0;
+  min-height: var(--sh-titlebar-h);
+  padding-left: var(--sh-space-2);
+  background: var(--sh-bg-chrome);
+  color: var(--sh-fg-on-dark-strong);
+  box-shadow:
+    inset 0 var(--sh-px) 0 0 var(--sh-color-dusk),
+    inset 0 calc(-1 * var(--sh-px)) 0 0 var(--sh-color-ink);
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.sh-titlebar__title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--sh-text-sm);
+  font-weight: 700;
+  letter-spacing: var(--sh-tracking-caps);
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sh-titlebar__subtitle {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--sh-fg-on-dark);
+  font-size: var(--sh-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sh-titlebar__spacer {
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-width: var(--sh-space-4);
+}
+
+.sh-window-controls {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+}
+
+/* Anything interactive in the bar must escape the drag region. */
+.sh-titlebar :is(button, a, input, select, [tabindex]),
+.sh-window-controls {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.sh-winbtn {
+  width: max(2.75rem, 44px);
+  min-width: max(2.75rem, 44px);
+  min-height: var(--sh-titlebar-h);
+  padding: 0;
+  background: transparent;
+  color: var(--sh-fg-on-dark-strong);
+  border: 0;
+  box-shadow: none;
+  clip-path: none;
+  filter: none;
+}
+
+.sh-winbtn:hover:not(:disabled) {
+  background: var(--sh-color-dusk);
+  color: var(--sh-color-cream);
+}
+
+.sh-winbtn:active:not(:disabled) {
+  background: var(--sh-color-cream);
+  color: var(--sh-color-ink);
+}
+
+.sh-winbtn--close:hover:not(:disabled) {
+  /* cream on berry is 4.04:1 — a graphic, which needs 3:1, not text. */
+  background: var(--sh-color-berry);
+  color: var(--sh-color-cream);
+}
+
+/*
+ * The glyphs are drawn, not iconography: bars and boxes made from a background and a
+ * clip path, so they inherit `currentColor` and ride the scale ladder.
+ */
+.sh-glyph {
+  display: block;
+  flex: 0 0 auto;
+  width: max(0.625rem, 10px);
+  height: max(0.625rem, 10px);
+  background: currentColor;
+  pointer-events: none;
+}
+
+.sh-glyph--min {
+  height: var(--sh-px2);
+}
+
+.sh-glyph--max {
+  background: transparent;
+  box-shadow: inset 0 0 0 var(--sh-px2) currentColor;
+}
+
+.sh-glyph--restore {
+  background: transparent;
+  box-shadow:
+    inset 0 0 0 var(--sh-px2) currentColor,
+    var(--sh-px3) calc(-1 * var(--sh-px3)) 0 calc(-1 * var(--sh-px)) currentColor;
+}
+
+.sh-glyph--close {
+  clip-path: polygon(
+    0 12%, 12% 0, 50% 38%, 88% 0, 100% 12%, 62% 50%,
+    100% 88%, 88% 100%, 50% 62%, 12% 100%, 0 88%, 38% 50%
+  );
+}
+
+.sh-glyph--plus {
+  clip-path: polygon(
+    40% 0, 60% 0, 60% 40%, 100% 40%, 100% 60%, 60% 60%,
+    60% 100%, 40% 100%, 40% 60%, 0 60%, 0 40%, 40% 40%
+  );
+}
+
+.sh-glyph--chevron {
+  clip-path: polygon(0 20%, 20% 0, 100% 50%, 20% 100%, 0 80%, 60% 50%);
+}
+
+.sh-glyph--pin {
+  clip-path: polygon(30% 0, 70% 0, 70% 55%, 100% 75%, 55% 75%, 55% 100%, 45% 100%, 45% 75%, 0 75%, 30% 55%);
+}
+
+/* ========================================================================== */
+/* 13. Tab strip                                                               */
+/* ========================================================================== */
+
+.sh-tabstrip {
+  display: flex;
+  gap: var(--sh-space-1);
+  align-items: flex-end;
+  min-width: 0;
+  min-height: calc(var(--sh-tab-h) + var(--sh-space-2));
+  padding: var(--sh-space-1) var(--sh-space-1) 0;
+  background: var(--sh-bg-chrome);
+  box-shadow: inset 0 calc(-1 * var(--sh-px2)) 0 0 var(--sh-color-ink);
+}
+
+.sh-tablist,
+[role='tablist'] {
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--sh-space-1);
+  align-items: flex-end;
+  min-width: 0;
+  padding-top: var(--sh-px2); /* room for the selected tab to sit 2px higher */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+}
+
+.sh-tabstrip__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--sh-space-1);
+  align-items: center;
+  padding-bottom: var(--sh-space-1);
+}
+
+/* A group never shrinks below its tabs — the strip scrolls instead, so a grouped tab
+   can never end up painted under the tab that follows it. */
+.sh-tabgroup {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--sh-space-1);
+  align-items: flex-end;
+  min-width: 0;
+  padding: 0 var(--sh-space-1);
+  box-shadow: inset 0 0 0 var(--sh-px) var(--sh-color-dusk);
+}
+
+.sh-tabgroup__label {
+  flex: 0 0 auto; /* the group's name is not the thing that gives way to a long tab */
+  align-self: center;
+  max-width: 8rem;
+  min-height: var(--sh-target-min);
+  overflow: hidden;
+  color: var(--sh-fg-on-dark);
+  font-size: var(--sh-text-xs);
+  font-weight: 700;
+  letter-spacing: var(--sh-tracking-caps);
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sh-tabgroup.is-collapsed .sh-tab:not([aria-selected='true']) {
+  display: none;
+}
+
+[role='tab'],
+.sh-tab {
+  display: flex;
+  flex: 0 1 var(--sh-tab-w);
+  gap: var(--sh-space-1);
+  align-items: center;
+  min-width: var(--sh-tab-w-min);
+  min-height: var(--sh-tab-h);
+  padding: 0 var(--sh-space-1) 0 var(--sh-space-2);
+  background: var(--sh-bg-wood);
+  color: var(--sh-fg-on-dark);
+  border: var(--sh-px) solid var(--sh-color-ink);
+  border-bottom: 0;
+  font-size: var(--sh-text-sm);
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--sh-hilite);
+  clip-path: var(--sh-notch-top);
+  filter: none;
+  transition:
+    background-color var(--sh-dur-instant) var(--sh-ease),
+    transform var(--sh-dur-instant) var(--sh-ease);
+}
+
+[role='tab']:hover:not([aria-selected='true']),
+.sh-tab:hover:not([aria-selected='true']) {
+  background: var(--sh-color-soil);
+  color: var(--sh-fg-on-dark-strong);
+}
+
+/* Selected sits 2px higher than its neighbours, like the belt's selected tool. */
+[role='tab'][aria-selected='true'],
+.sh-tab[aria-selected='true'] {
+  background: var(--sh-bg-panel);
+  color: var(--sh-fg);
+  transform: translateY(calc(-1 * var(--sh-px2)));
+  box-shadow: var(--sh-hilite);
+}
+
+.sh-tab__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Unsaved work is a mark as well as a colour, and the tab still says so in text. */
+.sh-tab.is-dirty .sh-tab__label::after {
+  content: ' \2022';
+  color: var(--sh-fg-accent);
+  font-weight: 700;
+}
+
+.sh-tab[aria-selected='false'].is-dirty .sh-tab__label::after {
+  color: var(--sh-color-lantern);
+}
+
+.sh-tab.is-pinned {
+  flex: 0 0 var(--sh-tab-w-pinned);
+  min-width: var(--sh-tab-w-pinned);
+  justify-content: center;
+  padding: 0 var(--sh-space-1);
+  box-shadow: var(--sh-hilite), inset 0 var(--sh-px2) 0 0 var(--sh-color-lantern);
+}
+
+.sh-tab.is-pinned .sh-tab__label {
+  display: none;
+}
+
+.sh-tab.is-dragging {
+  opacity: 0.7;
+  filter: var(--sh-shadow-lift);
+}
+
+.sh-tab.is-drop-target {
+  box-shadow: var(--sh-hilite), inset var(--sh-px2) 0 0 0 var(--sh-color-lantern);
+}
+
+.sh-tab-dropline {
+  flex: 0 0 var(--sh-px2);
+  align-self: stretch;
+  background: var(--sh-color-lantern);
+}
+
+.sh-tab__close {
+  flex: 0 0 auto;
+  width: var(--sh-target-min);
+  min-width: var(--sh-target-min);
+  height: var(--sh-target-min);
+  min-height: var(--sh-target-min);
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  box-shadow: none;
+  clip-path: none;
+  filter: none;
+}
+
+.sh-tab__close:hover:not(:disabled) {
+  background: var(--sh-fill-danger);
+  color: var(--sh-color-cream);
+}
+
+.sh-tab__close .sh-glyph {
+  width: max(0.5rem, 8px);
+  height: max(0.5rem, 8px);
+}
+
+/* ========================================================================== */
+/* 14. Scrollbars                                                              */
+/* ========================================================================== */
+
+.sh-app * {
+  scrollbar-color: var(--sh-color-bark) var(--sh-surface-gutter);
+}
+
+::-webkit-scrollbar {
+  width: var(--sh-scrollbar);
+  height: var(--sh-scrollbar);
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: var(--sh-surface-gutter);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--sh-color-bark);
+  border: var(--sh-px) solid var(--sh-color-ink);
+  box-shadow: var(--sh-hilite);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sh-color-soil);
+}
+
+/*
+ * The one thin bar in the app. A 24px gutter inside the tab strip would eat the strip
+ * at 200%, and the strip's real overflow affordances are full-size: the `>` menu
+ * button in `.sh-tabstrip__actions`, the arrow keys, and the wheel.
+ */
+.sh-tablist,
+[role='tablist'] {
+  scrollbar-width: thin;
+}
+
+.sh-tablist::-webkit-scrollbar,
+[role='tablist']::-webkit-scrollbar {
+  height: max(0.5rem, 8px);
+}
+
+/* ========================================================================== */
+/* 15. Focus — last, so it out-ranks every component state                     */
+/* ========================================================================== */
+
+/*
+ * A notched element clips an outline away, so focus is drawn as an inset two-tone
+ * ring: an ink band with a cream band inside it. One band always clears 3:1 against
+ * the control and against the surface behind it, and the two are 14.97:1 against each
+ * other, so the ring reads on parchment, lantern, bark, shadow and ink alike.
+ */
+:focus-visible,
+:is(button, a, input, select, textarea, summary, [tabindex], [role='button'],
+    [role='tab'], [role='option'], [role='menuitem'], [role='switch'],
+    .sh-btn, .sh-check, .sh-option, .sh-menuitem):focus-visible {
+  outline: none;
+  box-shadow: var(--sh-focus-ring);
+}
+
+/* On the dark chrome the ring flips so the cream band meets the wood first. */
+:is(.sh-titlebar, .sh-tabstrip, .sh-statusbar)
+  :is(button, a, [tabindex], [role='tab'], [role='button'], .sh-btn):focus-visible {
+  outline: none;
+  box-shadow: var(--sh-focus-ring-dark);
+}
+
+/* Not clipped, so these carry a real outline as well as the ring. */
+a:focus-visible,
+input[type='range']:focus-visible,
+input[type='checkbox']:focus-visible,
+input[type='radio']:focus-visible {
+  outline: var(--sh-focus-outline-w) solid var(--sh-color-ink);
+  outline-offset: var(--sh-px);
+}
+
+input[type='range']:focus-visible {
+  box-shadow: none;
+}
+
+input[type='range']:focus-visible::-webkit-slider-thumb {
+  background: var(--sh-color-cream);
+  box-shadow: inset 0 0 0 var(--sh-px2) var(--sh-color-ink);
+}
+
+input[type='checkbox']:focus-visible,
+input[type='radio']:focus-visible {
+  outline-color: var(--sh-color-cream);
+  box-shadow: inset 0 0 0 var(--sh-px2) var(--sh-color-ink);
+}
+
+/* The checked mark must survive the ring, so the two are composed rather than swapped. */
+input[type='checkbox']:checked:focus-visible {
+  box-shadow:
+    inset 0 0 0 var(--sh-px2) var(--sh-color-ink),
+    inset 0 0 0 var(--sh-px4) var(--sh-color-lantern);
+}
+
+input[type='radio']:checked:focus-visible {
+  box-shadow:
+    inset 0 0 0 var(--sh-px2) var(--sh-color-ink),
+    inset 0 0 0 calc(var(--sh-px) * 6) var(--sh-color-lantern);
+}
+
+/*
+ * The game canvas is focusable, and an inset ring would be painted over by the bitmap.
+ * It gets a real outline drawn inward instead, in the cream the game already uses for
+ * the cursor. The `#game` selector is here to out-rank the `outline: none` in
+ * index.html: the shell never leaves a focusable element without an indicator.
+ */
+canvas:focus-visible,
+#game:focus-visible {
+  outline: var(--sh-px2) solid var(--sh-color-cream);
+  outline-offset: calc(-1 * var(--sh-px2));
+  box-shadow: none;
+}
+
+/* A keyboard user moving a tab keeps a persistent marker while the mode is on. */
+.sh-tab.is-keyboard-moving {
+  box-shadow: var(--sh-hilite), inset 0 0 0 var(--sh-px2) var(--sh-color-lantern);
+}
+
+/* ========================================================================== */
+/* 16. Narrow windows — down to 640px with nothing clipped                     */
+/* ========================================================================== */
+
+@media (max-width: 40rem) {
+  :root {
+    --sh-tab-w: 8rem;
+    --sh-tab-w-min: 4.5rem;
+    --sh-notify-w: 20rem;
+    --sh-popover-w: 17rem;
+    --sh-scrollbar: max(0.75rem, 24px);
+  }
+
+  .sh-titlebar__subtitle {
+    display: none;
+  }
+
+  .sh-tabpanel,
+  [role='tabpanel'] {
+    padding: var(--sh-space-2);
+  }
+
+  .sh-tabgroup__label {
+    max-width: 5rem;
+  }
+
+  .sh-notify-stack {
+    left: var(--sh-space-2);
+    width: auto;
+  }
+
+  .sh-panel__body,
+  .sh-dialog__body {
+    padding: var(--sh-space-2);
+  }
+
+  .sh-panel__footer,
+  .sh-dialog__actions {
+    justify-content: stretch;
+  }
+
+  .sh-panel__footer > :is(button, .sh-btn),
+  .sh-dialog__actions > :is(button, .sh-btn) {
+    flex: 1 1 auto;
+  }
+
+  .sh-searchfield__input {
+    flex: 1 1 100%;
+  }
+}
+
+/* Short windows: the chrome stays, the panels give up their breathing room. */
+@media (max-height: 30rem) {
+  .sh-dialog__body {
+    max-height: 45dvh;
+  }
+
+  .sh-panel__body {
+    padding: var(--sh-space-2);
+  }
+}
+
+/* At 150% and 200% a 640px window is 427 or 320px of layout: one column. */
+:root[data-sh-scale='150'] .sh-grid,
+:root[data-sh-scale='200'] .sh-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+}
+
+/* ========================================================================== */
+/* 17. Forced colours                                                          */
+/* ========================================================================== */
+
+@media (forced-colors: active) {
+  /* The notch would clip the system focus outline away, and the shadow is noise. */
+  *,
+  *::before,
+  *::after {
+    clip-path: none !important;
+    filter: none !important;
+  }
+
+  :focus-visible {
+    outline: var(--sh-px3) solid Highlight !important;
+    outline-offset: calc(-1 * var(--sh-px3)) !important;
+    box-shadow: none !important;
+  }
+
+  :is(button, .sh-btn, [role='tab'], input, select, textarea) {
+    border: 1px solid ButtonBorder;
+  }
+
+  :is(button, .sh-btn):is(:hover, [aria-pressed='true'], [aria-selected='true']) {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+}

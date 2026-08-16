@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Sprout Hollow</title>
+
+    <!--
+      The shell stylesheets, in order: tokens.css publishes the fourteen palette entries
+      and the scale ladder, base.css builds the carved-wood components on top of them.
+      Everything visible reads its colour from these two and from nowhere else.
+    -->
+    <link rel="stylesheet" href="/src/shell/ui/tokens.css" />
+    <link rel="stylesheet" href="/src/shell/ui/base.css" />
+  </head>
+  <body>
+    <!--
+      The application root. `src/shell/app.ts` fills the four mount points below in the
+      order the `.sh-app` grid expects them: title bar, tab strip, panels, status line.
+      The two `display: contents` wrappers exist so the real `banner` and the real tab
+      strip are themselves rows of that grid rather than being boxed inside a div.
+    -->
+    <div id="app" class="sh-app">
+      <div id="shell-titlebar" style="display: contents"></div>
+      <div id="shell-tabstrip" style="display: contents"></div>
+      <main id="shell-panels" class="sh-main"></main>
+      <div id="shell-status" class="sh-statusbar"></div>
+    </div>
+
+    <!-- The notification stack. Fixed-position, so it lives outside the panel grid. -->
+    <div id="shell-notifications"></div>
+
+    <!-- Off-screen but still read: never display:none, or the live region goes silent. -->
+    <div id="live" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+
+    <noscript>
+      <!--
+        The one string in this application that cannot go through `t()`, because the
+        translator is JavaScript and JavaScript is exactly what is missing. Both
+        languages are spelled out here rather than picking one for the reader.
+      -->
+      <p>Sprout Hollow needs JavaScript. 呢個遊戲要開咗 JavaScript 先玩到。</p>
+    </noscript>
+
+    <script type="module" src="/src/shell/app.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,300 @@
+/*
+ * Sprout Hollow — shell design tokens.
+ *
+ * DESIGN.md sections 3, 4 and 6 expressed as CSS custom properties. This file and
+ * `src/engine/palette.ts` are the ONLY two places in the repository allowed to hold a
+ * literal colour. Everything else — every other stylesheet, every component — reads a
+ * custom property from here.
+ *
+ * The fourteen `--sh-color-*` entries are transcribed from `src/engine/palette.ts`
+ * character for character; `src/shell/ui/tokens.ts` exports a comparison helper and a
+ * test asserts the two never drift.
+ *
+ * The handful of `--sh-fg-*`, `--sh-fill-*` and `--sh-surface-*` literals below are not
+ * new colours: each is the result of the engine's own `shade()` / mix of two palette
+ * entries, recorded as a hex so the recipe is inspectable. Each one exists because the
+ * raw palette entry cannot carry 4.5:1 text on parchment — the measured ratio is in the
+ * comment beside it.
+ */
+
+:root {
+  /* ---------------------------------------------------------------------- */
+  /* The palette — exactly src/engine/palette.ts, all fourteen entries.      */
+  /* ---------------------------------------------------------------------- */
+  --sh-color-ink: #1b1a24;
+  --sh-color-shadow: #2f2b3d;
+  --sh-color-bark: #4a3a34;
+  --sh-color-soil: #6b4a34;
+  --sh-color-soil-wet: #43291f;
+  --sh-color-grass: #4f7a3a;
+  --sh-color-grass-lit: #6d9c46;
+  --sh-color-leaf: #2f5c33;
+  --sh-color-parchment: #e8d9b0;
+  --sh-color-cream: #f6efd8;
+  --sh-color-lantern: #f2a541;
+  --sh-color-berry: #c1504a;
+  --sh-color-sky: #8fb8c9;
+  --sh-color-dusk: #5c5470;
+
+  /* ---------------------------------------------------------------------- */
+  /* Derived tones. Palette entries mixed the way engine `shade()` mixes,     */
+  /* only where the raw entry cannot carry readable text.                    */
+  /* ---------------------------------------------------------------------- */
+
+  /* bark mixed 45% toward grassLit — the lit inner edge of a carved frame. */
+  --sh-frame-hilite: #5a663c;
+
+  /* berry shaded 30% toward ink. berry itself is 3.32:1 on parchment — unreadable.
+     This is 5.04:1 on parchment, 6.14:1 on cream, 4.57:1 on the row-hover tint. */
+  --sh-fg-danger: #8f403f;
+  /* berry shaded 35% toward cream, for the dark chrome: 6.24:1 on ink, 4.96:1 on shadow. */
+  --sh-fg-danger-lit: #d4887c;
+  /* sky shaded 60% toward ink. sky is 1.52:1 on parchment; this is 5.16:1. */
+  --sh-fg-info: #495966;
+  /* lantern shaded 60% toward ink. lantern is 1.46:1 on parchment; this is 5.08:1. */
+  --sh-fg-accent: #715230;
+  /* lantern mixed 25% toward cream — the lit face of a pressed-in-waiting button.
+     Carries ink at 9.73:1. */
+  --sh-fill-lantern-lit: #f3b867;
+  /* parchment mixed 8% toward soil — the zebra stripe. ink reads 11.05:1 on it. */
+  --sh-surface-stripe: #decea6;
+  /* parchment mixed 25% toward lantern — row hover. Every --sh-fg-* stays above 4.5:1. */
+  --sh-surface-hover: #ebcc94;
+  /* parchment mixed 20% toward bark — the scrollbar gutter. 5.57:1 against the bark thumb. */
+  --sh-surface-gutter: #c8b997;
+
+  /* ---------------------------------------------------------------------- */
+  /* Semantic surfaces and text. Components use these, not raw palette names. */
+  /* ---------------------------------------------------------------------- */
+  --sh-bg-app: var(--sh-color-ink);          /* the letterbox, per DESIGN.md 2 */
+  --sh-bg-chrome: var(--sh-color-shadow);    /* title bar, tab strip gutter */
+  --sh-bg-panel: var(--sh-color-parchment);  /* panel interior, DESIGN.md 6 */
+  --sh-bg-field: var(--sh-color-cream);      /* sunken inputs */
+  --sh-bg-wood: var(--sh-color-bark);        /* frames, inactive tabs */
+
+  --sh-fg: var(--sh-color-ink);              /* 12.28:1 on parchment */
+  --sh-fg-muted: var(--sh-color-shadow);     /*  9.77:1 on parchment */
+  --sh-fg-disabled: var(--sh-color-dusk);    /*  5.07:1 on parchment */
+  --sh-fg-ok: var(--sh-color-leaf);          /*  5.55:1 on parchment */
+  --sh-fg-on-dark: var(--sh-color-parchment);/*  9.77:1 on shadow, 12.28:1 on ink */
+  --sh-fg-on-dark-strong: var(--sh-color-cream); /* 11.90:1 on shadow, 14.97:1 on ink */
+  --sh-fill-danger: var(--sh-fg-danger);     /* cream on it reads 6.14:1 */
+  --sh-fill-accent: var(--sh-color-lantern); /* ink on it reads 8.39:1 */
+
+  /* ---------------------------------------------------------------------- */
+  /* Display scale. 100 / 125 / 150 / 200 %.                                 */
+  /* Every text size and every target below is in rem, so the ladder moves    */
+  /* the whole shell at once. `font-size` starts from the user's own default   */
+  /* (100%), so an OS-level font size still wins its share.                   */
+  /* ---------------------------------------------------------------------- */
+  --sh-scale: 1;
+  font-size: calc(var(--sh-scale) * 100%);
+
+  /* One game pixel, scaled. Frames, notches and the hard shadow are measured in
+     these so a 200% shell still looks like pixel art rather than a hairline. */
+  --sh-px: max(1px, calc(1px * var(--sh-scale)));
+  --sh-px2: calc(2 * var(--sh-px));
+  --sh-px3: calc(3 * var(--sh-px));
+  --sh-px4: calc(4 * var(--sh-px));
+
+  /* ---------------------------------------------------------------------- */
+  /* Spacing, in rem so it rides the scale ladder.                            */
+  /* ---------------------------------------------------------------------- */
+  --sh-space-0: 0rem;
+  --sh-space-1: 0.25rem;
+  --sh-space-2: 0.5rem;
+  --sh-space-3: 0.75rem;
+  --sh-space-4: 1rem;
+  --sh-space-5: 1.5rem;
+  --sh-space-6: 2rem;
+  --sh-space-7: 3rem;
+
+  /* ---------------------------------------------------------------------- */
+  /* Type. No web fonts (DESIGN.md 2) — display type is drawn with the game's  */
+  /* own 5x7 face onto a canvas; body copy is the platform UI face.           */
+  /* ---------------------------------------------------------------------- */
+  --sh-font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans",
+    "Noto Sans HK", "Microsoft JhengHei", "PingFang HK", sans-serif;
+  --sh-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  --sh-text-xs: 0.75rem;
+  --sh-text-sm: 0.8125rem;
+  --sh-text-md: 0.875rem;
+  --sh-text-lg: 1rem;
+  --sh-text-xl: 1.25rem;
+  --sh-leading: 1.45;
+  --sh-leading-tight: 1.2;
+  --sh-tracking-caps: 0.08em;
+
+  /* ---------------------------------------------------------------------- */
+  /* Targets and chrome sizes. `max(rem, px)` keeps every interactive target  */
+  /* at or above 24 x 24 CSS px even if the user's base font is below 16px.   */
+  /* ---------------------------------------------------------------------- */
+  --sh-target-min: max(1.5rem, 24px);
+  --sh-target: max(1.75rem, 28px);
+  --sh-titlebar-h: max(2rem, 32px);
+  --sh-tab-h: max(2rem, 32px);
+  --sh-tab-w: 11rem;
+  --sh-tab-w-min: 5.5rem;
+  --sh-tab-w-pinned: max(2.5rem, 40px);
+  --sh-scrollbar: max(1rem, 24px);
+  --sh-notify-w: 22rem;
+  --sh-dialog-w: 30rem;
+  --sh-popover-w: 20rem;
+  --sh-content-max: 60rem;
+
+  /* ---------------------------------------------------------------------- */
+  /* The recipes from DESIGN.md 6. Hard edges only: no radius, no blur.       */
+  /* ---------------------------------------------------------------------- */
+
+  /* Corners are notched by exactly one pixel, never rounded. */
+  --sh-notch-size: var(--sh-px);
+  --sh-notch: polygon(
+    var(--sh-notch-size) 0,
+    calc(100% - var(--sh-notch-size)) 0,
+    100% var(--sh-notch-size),
+    100% calc(100% - var(--sh-notch-size)),
+    calc(100% - var(--sh-notch-size)) 100%,
+    var(--sh-notch-size) 100%,
+    0 calc(100% - var(--sh-notch-size)),
+    0 var(--sh-notch-size)
+  );
+  /* Tabs and anything seated on an edge only notch the two free corners. */
+  --sh-notch-top: polygon(
+    var(--sh-notch-size) 0,
+    calc(100% - var(--sh-notch-size)) 0,
+    100% var(--sh-notch-size),
+    100% 100%,
+    0 100%,
+    0 var(--sh-notch-size)
+  );
+
+  /* A hard 2px shadow offset down-right. Never blurred, never a radius. It is a
+     filter rather than a box-shadow so it follows the notched silhouette. */
+  --sh-shadow-hard: drop-shadow(var(--sh-px2) var(--sh-px2) 0 var(--sh-color-shadow));
+  --sh-shadow-hard-sm: drop-shadow(var(--sh-px) var(--sh-px) 0 var(--sh-color-shadow));
+  --sh-shadow-lift: drop-shadow(var(--sh-px3) var(--sh-px3) 0 var(--sh-color-shadow));
+
+  /* Light falls from the upper left, always: raised things are lit top-left,
+     sunken things are shaded top-left. */
+  --sh-hilite: inset var(--sh-px) var(--sh-px) 0 0 var(--sh-frame-hilite);
+  --sh-sunk: inset var(--sh-px) var(--sh-px) 0 0 var(--sh-color-soil);
+
+  /* Frame weights: 3px on a panel, 1px on a button (DESIGN.md 6). */
+  --sh-frame: var(--sh-px3);
+  --sh-frame-thin: var(--sh-px);
+
+  /* A 50% checker — the CSS spelling of engine `dither()`. Hard stops only; this
+     is a pattern, not one of the gradients DESIGN.md 8 rules out. */
+  --sh-dither-soil: repeating-conic-gradient(
+    var(--sh-color-soil) 0% 25%,
+    transparent 0% 50%
+  );
+  --sh-dither-dusk: repeating-conic-gradient(
+    var(--sh-color-dusk) 0% 25%,
+    transparent 0% 50%
+  );
+  --sh-dither-cell: var(--sh-px2) var(--sh-px2);
+
+  /* Two-tone focus ring: an ink band with a cream band inside it. One of the two
+     always clears 3:1 against the element and against whatever sits behind it,
+     and the pair is 14.97:1 against each other, so the ring reads on parchment,
+     on lantern, on bark and on ink alike. Drawn inset because a notched element
+     clips its own outline away. */
+  --sh-focus-ring:
+    inset 0 0 0 var(--sh-px2) var(--sh-color-ink),
+    inset 0 0 0 var(--sh-px4) var(--sh-color-cream);
+  --sh-focus-ring-dark:
+    inset 0 0 0 var(--sh-px2) var(--sh-color-cream),
+    inset 0 0 0 var(--sh-px4) var(--sh-color-ink);
+  /* For elements that are not clipped, the same idea as a real outline. */
+  --sh-focus-outline-w: var(--sh-px2);
+
+  /* The blocking dialog dims to a shadow wash, not to 50% black (DESIGN.md 8). */
+  --sh-backdrop-alpha: 0.28;
+
+  /* ---------------------------------------------------------------------- */
+  /* Layers.                                                                 */
+  /* ---------------------------------------------------------------------- */
+  --sh-z-base: 0;
+  --sh-z-panel: 1;
+  --sh-z-sticky: 5;
+  --sh-z-chrome: 10;
+  --sh-z-popover: 100;
+  --sh-z-notify: 200;
+  --sh-z-dialog: 1000;
+
+  /* ---------------------------------------------------------------------- */
+  /* Motion. DESIGN.md 5: nothing eases longer than 250 ms.                   */
+  /* ---------------------------------------------------------------------- */
+  --sh-dur-instant: 90ms;
+  --sh-dur-fast: 120ms;
+  --sh-dur-base: 180ms;
+  --sh-dur-slow: 250ms;
+  --sh-ease: steps(3, end); /* grid-locked, never a smooth glide */
+  --sh-ease-smooth: cubic-bezier(0.2, 0, 0.2, 1);
+
+  color-scheme: dark;
+}
+
+/* -------------------------------------------------------------------------- */
+/* The display-scale ladder. `applyRootTokens()` in tokens.ts sets both the     */
+/* attribute and the inline custom property; either alone is enough.           */
+/* -------------------------------------------------------------------------- */
+:root[data-sh-scale='100'] { --sh-scale: 1; }
+:root[data-sh-scale='125'] { --sh-scale: 1.25; }
+:root[data-sh-scale='150'] { --sh-scale: 1.5; }
+:root[data-sh-scale='200'] { --sh-scale: 2; }
+
+/* -------------------------------------------------------------------------- */
+/* Motion preference, in both directions.                                      */
+/*                                                                             */
+/*   system reduce            -> stilled                                       */
+/*   system reduce + .sh-motion-full  -> moving  (in-app override wins)        */
+/*   .sh-reduce-motion        -> stilled regardless of the system              */
+/*                                                                             */
+/* The class rules are (0,2,0) and beat the (0,1,0) rule inside the media       */
+/* query whatever the source order, so the in-app setting always decides.       */
+/* -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --sh-dur-instant: 0ms;
+    --sh-dur-fast: 0ms;
+    --sh-dur-base: 0ms;
+    --sh-dur-slow: 0ms;
+  }
+
+  /* Catches anything set outside these tokens, e.g. an inline transition. */
+  :root:not(.sh-motion-full) *,
+  :root:not(.sh-motion-full) *::before,
+  :root:not(.sh-motion-full) *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+:root.sh-motion-full {
+  --sh-dur-instant: 90ms;
+  --sh-dur-fast: 120ms;
+  --sh-dur-base: 180ms;
+  --sh-dur-slow: 250ms;
+}
+
+:root.sh-reduce-motion {
+  --sh-dur-instant: 0ms;
+  --sh-dur-fast: 0ms;
+  --sh-dur-base: 0ms;
+  --sh-dur-slow: 0ms;
+}
+
+:root.sh-reduce-motion *,
+:root.sh-reduce-motion *::before,
+:root.sh-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

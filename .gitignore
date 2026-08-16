@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-electron/
+dist-site/
+release/
+.vite/
+
+# Test and tooling output
+coverage/
+*.tsbuildinfo
+*.log
+npm-debug.log*
+
+# Local environment
+.env
+.env.local
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# OS cruft
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/

@@ -1,0 +1,303 @@
+/* Sprout Hollow landing page.
+   Same palette and the same rules as the game: hard edges, no radius, no blur,
+   light from the upper left. See DESIGN.md. */
+
+:root {
+  --ink: #1b1a24;
+  --shadow: #2f2b3d;
+  --bark: #4a3a34;
+  --soil: #6b4a34;
+  --soil-wet: #43291f;
+  --grass: #4f7a3a;
+  --grass-lit: #6d9c46;
+  --leaf: #2f5c33;
+  --parchment: #e8d9b0;
+  --cream: #f6efd8;
+  --lantern: #f2a541;
+  --berry: #c1504a;
+  --sky: #8fb8c9;
+  --dusk: #5c5470;
+
+  --measure: 62ch;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--ink);
+}
+
+body {
+  margin: 0;
+  padding: 0 1.25rem 4rem;
+  background:
+    linear-gradient(180deg, #221f2e 0%, var(--ink) 55%),
+    var(--ink);
+  color: var(--parchment);
+  font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+  image-rendering: pixelated;
+}
+
+a {
+  color: var(--lantern);
+}
+
+a:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid var(--cream);
+  outline-offset: 2px;
+}
+
+code,
+pre {
+  font-family: inherit;
+}
+
+/* ---------- hero ---------- */
+
+.hero {
+  max-width: 70rem;
+  margin: 0 auto;
+  padding: 4rem 0 3rem;
+  text-align: center;
+}
+
+.wordmark {
+  display: block;
+  margin: 0 auto;
+  image-rendering: pixelated;
+  max-width: 100%;
+  height: auto;
+}
+
+.tagline {
+  margin: 1.5rem auto 2.5rem;
+  max-width: 42ch;
+  color: var(--cream);
+  font-size: 1.05rem;
+}
+
+.downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.btn {
+  display: block;
+  min-width: 13rem;
+  padding: 0.7rem 1.25rem;
+  text-align: left;
+  text-decoration: none;
+  color: var(--parchment);
+  background: var(--bark);
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--shadow);
+  transition: none;
+}
+
+.btn:hover {
+  background: var(--soil);
+  color: var(--cream);
+}
+
+.btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--shadow);
+}
+
+.btn-primary {
+  background: var(--lantern);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.btn-primary:hover {
+  background: var(--cream);
+  color: var(--ink);
+}
+
+.btn-label {
+  display: block;
+}
+
+.btn-sub {
+  display: block;
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+
+.release-line {
+  margin-top: 1.5rem;
+  color: var(--sky);
+  font-size: 0.85rem;
+}
+
+.unsigned-note {
+  margin: 0.75rem auto 0;
+  max-width: 56ch;
+  color: var(--dusk);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+/* ---------- sections ---------- */
+
+main {
+  max-width: 70rem;
+  margin: 0 auto;
+}
+
+section {
+  margin: 4rem 0;
+}
+
+h2 {
+  margin: 0 0 0.75rem;
+  color: var(--lantern);
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+p {
+  max-width: var(--measure);
+}
+
+.note {
+  color: var(--dusk);
+  font-size: 0.85rem;
+}
+
+/* ---------- screenshots ---------- */
+
+.shots {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+}
+
+.shots figure {
+  margin: 0;
+}
+
+.shots img {
+  width: 100%;
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--shadow);
+  background: var(--ink);
+}
+
+.shots figcaption {
+  margin-top: 0.6rem;
+  color: var(--dusk);
+  font-size: 0.8rem;
+}
+
+/* A screenshot that has not been captured yet must not leave a broken icon. */
+.shots figure[hidden] {
+  display: none;
+}
+
+/* ---------- wood panels ---------- */
+
+.panels {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+}
+
+.panel {
+  padding: 1.25rem 1.4rem 1.4rem;
+  background: var(--soil-wet);
+  border: 3px solid var(--bark);
+  outline: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--shadow);
+  /* light from the upper left, always */
+  border-top-color: var(--soil);
+  border-left-color: var(--soil);
+}
+
+.panel h2 {
+  color: var(--grass-lit);
+}
+
+.panel p {
+  margin-bottom: 0;
+  font-size: 0.9rem;
+}
+
+/* ---------- controls table ---------- */
+
+.controls table {
+  width: 100%;
+  max-width: 40rem;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.controls th,
+.controls td {
+  padding: 0.4rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--shadow);
+}
+
+.controls th {
+  color: var(--sky);
+  font-weight: 400;
+  white-space: nowrap;
+  width: 12rem;
+}
+
+/* ---------- build block ---------- */
+
+.build pre {
+  max-width: 40rem;
+  margin: 0 0 0.9rem;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  color: var(--cream);
+  background: #14131b;
+  border: 2px solid var(--bark);
+  box-shadow: 3px 3px 0 var(--shadow);
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+
+/* ---------- footer ---------- */
+
+footer {
+  max-width: 70rem;
+  margin: 5rem auto 0;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--shadow);
+  font-size: 0.82rem;
+}
+
+footer .quiet {
+  color: var(--dusk);
+}
+
+@media (max-width: 40rem) {
+  .btn {
+    min-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn:active {
+    transform: none;
+  }
+}

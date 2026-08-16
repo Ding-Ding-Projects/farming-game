@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sprout Hollow — a cozy pixel farming game for the desktop</title>
+    <meta
+      name="description"
+      content="Sprout Hollow is a quiet pixel-art farming game for Windows, macOS and Linux. Clear the valley, work the soil, survive four seasons. Free and open source."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://api.github.com"
+    />
+    <meta property="og:title" content="Sprout Hollow" />
+    <meta
+      property="og:description"
+      content="A quiet valley, a rusty hoe, and one year to make something of it."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <canvas id="wordmark" class="wordmark" aria-label="Sprout Hollow" role="img"></canvas>
+      <p class="tagline">A quiet valley, a rusty hoe, and one year to make something of it.</p>
+
+      <div class="downloads">
+        <a class="btn btn-primary" id="dl-win" href="https://github.com/DingDingChae/sprout-hollow/releases/latest">
+          <span class="btn-label">Download for Windows</span>
+          <span class="btn-sub" id="sub-win">Installer</span>
+        </a>
+        <a class="btn" id="dl-mac" href="https://github.com/DingDingChae/sprout-hollow/releases/latest">
+          <span class="btn-label">macOS</span>
+          <span class="btn-sub" id="sub-mac">Disk image</span>
+        </a>
+        <a class="btn" id="dl-linux" href="https://github.com/DingDingChae/sprout-hollow/releases/latest">
+          <span class="btn-label">Linux</span>
+          <span class="btn-sub" id="sub-linux">AppImage</span>
+        </a>
+      </div>
+      <p class="release-line" id="release-line">Free and open source. No account, no telemetry.</p>
+      <p class="unsigned-note">
+        The installers are not code-signed, so Windows SmartScreen and macOS Gatekeeper will
+        warn on first run. Every build is produced in public from the source in this
+        repository, and you can build it yourself instead.
+      </p>
+    </header>
+
+    <main>
+      <section class="shots" id="shots" aria-label="Screenshots">
+        <figure>
+          <img src="./shots/farm.png" alt="The farm at midday, with tilled rows and ripe crops." loading="lazy" />
+          <figcaption>Twenty by eleven tiles of valley floor. Everything you see is drawn in code.</figcaption>
+        </figure>
+        <figure>
+          <img src="./shots/shop.png" alt="The seed shop panel, listing crops for the current season." loading="lazy" />
+          <figcaption>Buy what the season allows. Sell what you carried home.</figcaption>
+        </figure>
+        <figure>
+          <img src="./shots/night.png" alt="The farm after dark, lit by the farmhouse window." loading="lazy" />
+          <figcaption>The clock runs from six in the morning until two the next.</figcaption>
+        </figure>
+      </section>
+
+      <section class="panels" aria-label="What is in the game">
+        <article class="panel">
+          <h2>Four real seasons</h2>
+          <p>
+            Twelve crops, each with its own season, growth time and payoff. Winter is not a
+            dead month, but it is a lean one. Anything still in the ground when the season
+            turns is lost.
+          </p>
+        </article>
+        <article class="panel">
+          <h2>Water it or lose it</h2>
+          <p>
+            Crops advance only on the days they are watered. Miss three in a row after a
+            sprout appears and it withers. Rain does the work for you; sprinklers do it every
+            day, if you can afford them.
+          </p>
+        </article>
+        <article class="panel">
+          <h2>Energy is the real currency</h2>
+          <p>
+            Every swing of the hoe costs energy and ten minutes of daylight. Push past either
+            and the farmer is carried home, with a bill for it in the morning.
+          </p>
+        </article>
+        <article class="panel">
+          <h2>Drawn and sung in code</h2>
+          <p>
+            No sprite sheets, no font files, no audio files, no runtime dependencies. The
+            tiles, the crops, the farmer, the 5&times;7 typeface and every sound are generated
+            when the game starts.
+          </p>
+        </article>
+      </section>
+
+      <section class="controls" aria-label="Controls">
+        <h2>Controls</h2>
+        <table>
+          <tbody>
+            <tr><th scope="row">Arrows / WASD</th><td>Walk, and face that way</td></tr>
+            <tr><th scope="row">Space / Enter</th><td>Use the held tool on the faced tile</td></tr>
+            <tr><th scope="row">1 &ndash; 7</th><td>Hoe, can, seeds, hand, axe, sprinkler, fertilizer</td></tr>
+            <tr><th scope="row">Q / E</th><td>Cycle the selected seed</td></tr>
+            <tr><th scope="row">B</th><td>Shop</td></tr>
+            <tr><th scope="row">I</th><td>Bag</td></tr>
+            <tr><th scope="row">N</th><td>Sleep</td></tr>
+            <tr><th scope="row">H / F1</th><td>Help</td></tr>
+            <tr><th scope="row">M</th><td>Mute</td></tr>
+            <tr><th scope="row">Esc</th><td>Close the top panel</td></tr>
+          </tbody>
+        </table>
+        <p class="note">Playable start to finish from the keyboard. The mouse is optional.</p>
+      </section>
+
+      <section class="build" aria-label="Build it yourself">
+        <h2>Build it yourself</h2>
+        <pre><code>git clone https://github.com/DingDingChae/sprout-hollow.git
+cd sprout-hollow
+npm install
+npm start</code></pre>
+        <p class="note">
+          Electron, TypeScript and Vite. <code>npm test</code> runs the rule-layer suite,
+          <code>npm run package</code> produces the installer for your platform.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        <a href="https://github.com/DingDingChae/sprout-hollow">Source on GitHub</a>
+        &nbsp;&middot;&nbsp;
+        <a href="https://github.com/DingDingChae/sprout-hollow/releases">All releases</a>
+        &nbsp;&middot;&nbsp;
+        MIT licensed
+      </p>
+      <p class="quiet">No trackers, no analytics, no cookies. This page talks to GitHub only to find the newest release.</p>
+    </footer>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
