@@ -16,7 +16,10 @@ import * as path from 'node:path'
 // Node refuses to spawn a .cmd shim directly since 18.20, so on Windows this has to go
 // through the shell. Every argument here is a literal in this file — nothing reaches the
 // shell that did not come from this repository.
-const render = spawnSync('npx', ['vitest', 'run', 'tests/shots.test.ts'], {
+// Both capture suites: the world and interiors are art-layer drawings, the panels are
+// driven through the real scene code. Rendering only one of them would publish half a
+// matrix and look like a complete one.
+const render = spawnSync('npx', ['vitest', 'run', 'tests/shots.test.ts', 'tests/panels.test.ts'], {
   stdio: 'inherit',
   env: { ...process.env, SHOTS: '1' },
   cwd: process.cwd(),

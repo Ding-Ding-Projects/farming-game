@@ -99,6 +99,18 @@ jobs:
             throw "the setup executable is implausibly small; this is not a real build"
           }
 
+      # An icon named in the config proves nothing: electron-builder will warn and carry on
+      # with the framework default, and the installer looks right in CI while shipping
+      # somebody else's mark. This looks for the mark's exact bytes inside the artifact.
+      - name: Assert the application mark reached the executables
+        shell: pwsh
+        run: |
+          node scripts/check-icon.mjs
+          foreach ($exe in Get-ChildItem staging -Filter *.exe) {
+            node scripts/check-icon.mjs $exe.FullName
+            if ($LASTEXITCODE -ne 0) { throw "$($exe.Name) is not carrying the application mark" }
+          }
+
       # The release contract requires this assertion, not an assumption: every setup
       # executable must actually report NotSigned before anything is published.
       - name: Assert every executable is unsigned

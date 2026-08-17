@@ -119,7 +119,6 @@ const INNER_R = PANEL_X + PANEL_W - 16
 
 const TAB_Y = PANEL_Y + 34
 const TAB_H = 26
-const TAB_W = 132
 
 const ROW_Y = PANEL_Y + 74
 const ROW_H = 34
@@ -155,7 +154,29 @@ const STRIPE = mixHex(PAL.parchment, PAL.soil, 0.1)
 const CELL_EDGE = mixHex(PAL.parchment, PAL.ink, 0.3)
 
 const TABS = ['STOCK', 'BUILDINGS', 'MACHINES', 'ANIMALS', 'LAND'] as const
-type TabIndex = 0 | 1 | 2 | 3
+
+const TAB_GAP = 8
+/** Room kept at the right of the strip for the "1-6 OF 9" row counter. */
+const TAB_TAG_W = 92
+/**
+ * Tab width is divided out of the strip rather than fixed, so the row counter never
+ * collides with the last tab and a tab is never cut off by the panel edge. It was a fixed
+ * 132 px, which fitted four shelves exactly; the fifth ran off the end of the panel and
+ * straight through the counter.
+ */
+const TAB_W = Math.floor(
+  (PANEL_W - 32 - TAB_TAG_W - TAB_GAP * (TABS.length - 1)) / TABS.length,
+)
+/**
+ * An index into `TABS`, derived from it rather than written out.
+ *
+ * It used to be the literal union `0 | 1 | 2 | 3`, and the cycling below used a literal
+ * `% 4`. Adding the fifth shelf therefore left it unreachable from the keyboard: Q and E
+ * and Tab wrapped around the first four, and only a mouse click could reach it — and that
+ * click cast an out-of-range index straight through the type. Deriving the range from the
+ * table means the next shelf added is reachable the moment it exists.
+ */
+type TabIndex = number
 
 /* ------------------------------------------------------------------ widgets */
 
@@ -525,6 +546,7 @@ function landRows(ctx: SceneContext, take: (result: ActionResult) => void): Row[
     const deedsHeld = materialCount(state, 'deed')
     const tiles = regionTileCount(region)
 
+    const deeds = (n: number): string => `${n} ${n === 1 ? 'DEED' : 'DEEDS'}`
     const reason = owned
       ? 'ALREADY YOURS'
       : state.progression.level < region.level
@@ -532,7 +554,7 @@ function landRows(ctx: SceneContext, take: (result: ActionResult) => void): Row[
         : state.gold < region.cost
           ? `NEEDS ${region.cost}G`
           : deedsHeld < region.deeds
-            ? `NEEDS ${region.deeds} DEEDS, YOU HAVE ${deedsHeld}`
+            ? `NEEDS ${deeds(region.deeds)}, YOU HAVE ${deedsHeld}`
             : ''
 
     rows.push({
@@ -540,11 +562,11 @@ function landRows(ctx: SceneContext, take: (result: ActionResult) => void): Row[
       note: owned
         ? `${tiles} TILES, ALREADY CLEARED FOR WORK`
         : reason === ''
-          ? `${tiles} TILES AND ${region.deeds} DEEDS`
+          ? `${tiles} TILES AND ${deeds(region.deeds)}`
           : `${tiles} TILES - ${reason}`,
       price: owned ? 'OWNED' : `${region.cost}G`,
       priceWarn: !owned && state.gold < region.cost,
-      held: owned ? '' : `${deedsHeld}/${region.deeds} DEEDS`,
+      held: owned ? '' : `${deedsHeld} OF ${deeds(region.deeds)}`,
       locked: owned || reason !== '',
       icon: (g, x, y) => {
         drawPlotIcon(g, x, y, owned)
@@ -701,7 +723,7 @@ export function createShopScene(): Scene {
   }
 
   const setTab = (ctx: SceneContext, next: TabIndex): void => {
-    if (next === tab) return
+    if (next < 0 || next >= TABS.length || next === tab) return
     tab = next
     cursor = 0
     col = 0
@@ -789,8 +811,10 @@ export function createShopScene(): Scene {
       if (input.repeated('ArrowLeft') || input.repeated('KeyA')) moveCol(-1)
       if (input.repeated('PageDown')) moveRow(VISIBLE)
       if (input.repeated('PageUp')) moveRow(-VISIBLE)
-      if (input.pressed('KeyE') || input.pressed('Tab')) setTab(ctx, ((tab + 1) % 4) as TabIndex)
-      if (input.pressed('KeyQ')) setTab(ctx, ((tab + 3) % 4) as TabIndex)
+      if (input.pressed('KeyE') || input.pressed('Tab')) {
+        setTab(ctx, (tab + 1) % TABS.length)
+      }
+      if (input.pressed('KeyQ')) setTab(ctx, (tab + TABS.length - 1) % TABS.length)
 
       const activate = input.pressed('Enter') || input.pressed('NumpadEnter') || input.pressed('Space')
 
@@ -802,7 +826,7 @@ export function createShopScene(): Scene {
       drawText(g, purse, INNER_R - textWidth(purse), PANEL_Y + 14, PAL.ink)
 
       for (let t = 0; t < TABS.length; t++) {
-        const tx = INNER_X + t * (TAB_W + 8)
+        const tx = INNER_X + t * (TAB_W + TAB_GAP)
         const hovered = inside(p, tx, TAB_Y, TAB_W, TAB_H)
         if (p.pressed && hovered) setTab(ctx, t as TabIndex)
         plate(g, TABS[t], tx, TAB_Y, TAB_W, TAB_H, {
