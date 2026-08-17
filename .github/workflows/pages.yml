@@ -22,9 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      # Whichever attempt actually deployed. The retry below only runs when the first
-      # attempt failed, so exactly one of these is ever set.
-      url: ${{ steps.deploy.outputs.page_url || steps.deploy-retry.outputs.page_url }}
+      # Whichever attempt actually deployed. Each retry below runs only when the one
+      # before it failed, so exactly one of these is ever set.
+      url: >-
+        ${{ steps.deploy.outputs.page_url
+            || steps.deploy-retry.outputs.page_url
+            || steps.deploy-final.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -56,22 +59,40 @@ jobs:
           path: dist-site
       # Creating the deployment is a single API call with no retry inside the action: when
       # Pages answers 503 the whole run goes red on a build that was otherwise finished.
-      # That is not hypothetical here — three of the last eight runs died that way, on
-      # 503 and on 429, while the commits either side deployed cleanly. So the first
-      # attempt is allowed to fail and a second one runs only if it did.
+      # That is not hypothetical here — four of the last ten runs died that way, on 503
+      # and on 429, while the commits either side deployed cleanly.
       #
-      # Deliberately one retry, not a loop: a second 503 a minute later means Pages is
-      # actually down, and a run that keeps trying for ten minutes reports a real outage
-      # as a slow success. Deliberately no third-party retry action either, for the same
-      # reason configure-pages was dropped above — every action fetched is another thing
-      # that can be rate-limited.
+      # So the deployment is attempted three times, and only the last one is allowed to
+      # take the job down. The waits between them are the point: a first version of this
+      # retried immediately and both attempts 503'd 1.1 seconds apart, which is no retry
+      # at all. A transient Pages fault needs tens of seconds, not one.
+      #
+      # Three attempts over about two minutes, and then it goes red. A run that keeps
+      # trying for ten minutes reports a real outage as a slow success, which is worse
+      # than failing. No third-party retry action either, for the same reason
+      # configure-pages was dropped above — every action fetched is another thing that can
+      # be rate-limited.
       - id: deploy
         uses: actions/deploy-pages@v4
         continue-on-error: true
 
-      # No continue-on-error here on purpose: this one is allowed to take the job down.
-      # Two 503s a minute apart is a real outage, and a green run would be a lie.
+      - name: Wait for Pages to come back
+        if: steps.deploy.outcome == 'failure'
+        run: sleep 30
+
       - name: Deploy again if Pages was briefly unavailable
         id: deploy-retry
         if: steps.deploy.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Wait longer before the last attempt
+        if: steps.deploy.outcome == 'failure' && steps.deploy-retry.outcome == 'failure'
+        run: sleep 90
+
+      # No continue-on-error here on purpose: this one is allowed to take the job down.
+      # Three 503s over two minutes is a real outage, and a green run would be a lie.
+      - name: Last attempt at deploying
+        id: deploy-final
+        if: steps.deploy.outcome == 'failure' && steps.deploy-retry.outcome == 'failure'
         uses: actions/deploy-pages@v4
