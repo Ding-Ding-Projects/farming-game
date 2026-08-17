@@ -27,40 +27,63 @@
       <p class="tagline">A quiet valley, a rusty hoe, and one year to make something of it.</p>
 
       <div class="downloads">
-        <a class="btn btn-primary" id="dl-win" href="https://github.com/DingDingChae/sprout-hollow/releases/latest">
+        <a class="btn btn-primary" id="dl-win" href="https://github.com/Ding-Ding-Projects/farming-game/releases/latest">
           <span class="btn-label">Download for Windows</span>
           <span class="btn-sub" id="sub-win">Installer</span>
         </a>
-        <a class="btn" id="dl-mac" href="https://github.com/DingDingChae/sprout-hollow/releases/latest">
-          <span class="btn-label">macOS</span>
-          <span class="btn-sub" id="sub-mac">Disk image</span>
-        </a>
-        <a class="btn" id="dl-linux" href="https://github.com/DingDingChae/sprout-hollow/releases/latest">
-          <span class="btn-label">Linux</span>
-          <span class="btn-sub" id="sub-linux">AppImage</span>
+        <a class="btn" href="https://github.com/Ding-Ding-Projects/farming-game#building-it-yourself">
+          <span class="btn-label">Build from source</span>
+          <span class="btn-sub">Node 22 and npm</span>
         </a>
       </div>
       <p class="release-line" id="release-line">Free and open source. No account, no telemetry.</p>
       <p class="unsigned-note">
-        The installers are not code-signed, so Windows SmartScreen and macOS Gatekeeper will
-        warn on first run. Every build is produced in public from the source in this
-        repository, and you can build it yourself instead.
+        Windows only. The installer is not code-signed, so SmartScreen will warn on first
+        run. Every build is produced in public from the source in this repository, and you
+        can build it yourself instead.
       </p>
     </header>
 
     <main>
       <section class="shots" id="shots" aria-label="Screenshots">
         <figure>
-          <img src="./shots/farm.png" alt="The farm at midday, with tilled rows and ripe crops." loading="lazy" />
-          <figcaption>Twenty by eleven tiles of valley floor. Everything you see is drawn in code.</figcaption>
+          <img
+            src="./shots/farm-spring-midday.png"
+            alt="A spring farm at midday: tilled rows of crops at different growth stages beside a plank farmhouse, with rocks, fallen logs and a pond on the valley floor."
+            width="960"
+            height="528"
+            loading="lazy"
+          />
+          <figcaption>
+            Twenty by eleven tiles of valley floor. Watered soil reads darker than dry.
+            Everything here is drawn in code — there is not one image file in the game.
+          </figcaption>
         </figure>
         <figure>
-          <img src="./shots/shop.png" alt="The seed shop panel, listing crops for the current season." loading="lazy" />
-          <figcaption>Buy what the season allows. Sell what you carried home.</figcaption>
+          <img
+            src="./shots/farm-evening.png"
+            alt="The same farm in the evening, washed in warm lantern light."
+            width="960"
+            height="528"
+            loading="lazy"
+          />
+          <figcaption>
+            The clock runs from six in the morning until two the next, and the light
+            follows it all the way down.
+          </figcaption>
         </figure>
         <figure>
-          <img src="./shots/night.png" alt="The farm after dark, lit by the farmhouse window." loading="lazy" />
-          <figcaption>The clock runs from six in the morning until two the next.</figcaption>
+          <img
+            src="./shots/farm-winter.png"
+            alt="The farm in winter: pale frosted grass, drifting snow, and bare trees."
+            width="960"
+            height="528"
+            loading="lazy"
+          />
+          <figcaption>
+            Winter frosts the valley and strips the trees. Nothing grazes, so the hay you
+            cut in autumn is what gets your animals through.
+          </figcaption>
         </figure>
       </section>
 
@@ -119,7 +142,7 @@
 
       <section class="build" aria-label="Build it yourself">
         <h2>Build it yourself</h2>
-        <pre><code>git clone https://github.com/DingDingChae/sprout-hollow.git
+        <pre><code>git clone https://github.com/Ding-Ding-Projects/farming-game.git
 cd sprout-hollow
 npm install
 npm start</code></pre>
@@ -132,9 +155,9 @@ npm start</code></pre>
 
     <footer>
       <p>
-        <a href="https://github.com/DingDingChae/sprout-hollow">Source on GitHub</a>
+        <a href="https://github.com/Ding-Ding-Projects/farming-game">Source on GitHub</a>
         &nbsp;&middot;&nbsp;
-        <a href="https://github.com/DingDingChae/sprout-hollow/releases">All releases</a>
+        <a href="https://github.com/Ding-Ding-Projects/farming-game/releases">All releases</a>
         &nbsp;&middot;&nbsp;
         MIT licensed
       </p>

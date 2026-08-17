@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, session, shell } from 'electron'
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
+import { runCapture, wantsCapture } from './capture'
 
 /** 4x the 320x224 logical framebuffer, and 2x as the floor. */
 const WINDOW_W = 1280
@@ -136,10 +137,25 @@ function createWindow(): void {
       sandbox: true,
       webviewTag: false,
       spellcheck: false,
+      // Screenshot mode runs the window hidden; without this the game loop is
+      // throttled to a crawl and every capture photographs the same frame.
+      backgroundThrottling: !wantsCapture(process.argv),
     },
   })
 
-  win.once('ready-to-show', () => win.show())
+  if (wantsCapture(process.argv)) {
+    // Deliberately never shown. On a GPU-less off-screen desktop the first paint
+    // never completes, so `ready-to-show` never fires — and calling show() before
+    // that paint wedges the renderer outright (no dom-ready, no console, nothing).
+    // Left hidden, the renderer runs normally and the canvas can be read directly.
+    // `backgroundThrottling: false` keeps requestAnimationFrame ticking while hidden.
+    runCapture(win, process.argv).catch((err) => {
+      process.stdout.write(`capture failed: ${String(err)}\n`)
+      app.exit(1)
+    })
+  } else {
+    win.once('ready-to-show', () => win.show())
+  }
   win.setMenuBarVisibility(false)
   win.on('maximize', () => pushMaximizedState(win))
   win.on('unmaximize', () => pushMaximizedState(win))

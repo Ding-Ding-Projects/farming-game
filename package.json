@@ -15,12 +15,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "package": "npm run build && electron-builder --publish never"
+    "package": "npm run build && electron-builder --win squirrel --publish never",
+    "count": "node scripts/count-lines.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
     "electron": "^43.4.0",
     "electron-builder": "^26.15.3",
+    "electron-builder-squirrel-windows": "^26.15.3",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vitest": "^2.1.4"
@@ -38,24 +40,15 @@
     ],
     "win": {
       "target": [
-        "nsis"
+        "squirrel"
       ]
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+    "squirrelWindows": {
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "msi": false
     },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "category": "Game"
-    },
-    "mac": {
-      "target": [
-        "dmg"
-      ],
-      "category": "public.app-category.games"
-    }
+    "forceCodeSigning": false,
+    "signExecutable": false,
+    "signAndEditExecutable": false
   }
 }

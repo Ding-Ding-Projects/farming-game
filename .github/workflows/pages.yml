@@ -36,7 +36,7 @@ jobs:
       - name: Build the landing page
         run: npm run build:site
         env:
-          PAGES_BASE: /sprout-hollow/
+          PAGES_BASE: /farming-game/
 
       # Vite emits no underscore-prefixed directories, but Pages still runs Jekyll
       # over the artifact unless told otherwise.

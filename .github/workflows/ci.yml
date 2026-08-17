@@ -4,10 +4,21 @@ on:
   push:
   pull_request:
 
+# A newer push to the same ref makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
-    name: Typecheck, test, build
-    runs-on: ubuntu-latest
+    name: Check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu is the fast gate; windows is the platform this actually ships for,
+        # so a Windows-only break must not wait until release day to be noticed.
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -21,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
         env:
-          # The workflow never launches Electron, only type-checks against it.
+          # This job never launches Electron, only type-checks against it.
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
       - name: Typecheck
@@ -35,3 +46,38 @@ jobs:
 
       - name: Build the renderer
         run: npm run build:renderer
+
+      - name: Build the website
+        run: npm run build:site
+
+  screenshots:
+    name: Render screenshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      # The shot renderer drives the real art modules. If someone changes a drawing
+      # signature, this fails here rather than silently rotting until the README is
+      # next regenerated.
+      - name: Render the screenshots
+        run: npx vitest run tests/shots.test.ts
+        env:
+          SHOTS: '1'
+
+      - name: Upload the rendered frames
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: docs/shots/*.png
+          if-no-files-found: error
+
+  # Packaging and publishing live in release.yml, which runs on every push to main.
+  # Keeping them there means there is exactly one place that can produce a release,
+  # so two workflows can never race to publish the same tag.
