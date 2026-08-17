@@ -37,17 +37,61 @@ for (const required of ['dist/index.html', 'dist-electron/main.js']) {
   }
 }
 
-const electron = path.join(
-  root,
-  'node_modules',
-  'electron',
-  'dist',
-  process.platform === 'win32' ? 'electron.exe' : 'electron',
-)
-if (!fs.existsSync(electron)) {
-  console.error('smoke failed: the Electron binary is not installed.')
+/**
+ * Where Electron actually is.
+ *
+ * The `electron` package's main export *is* the path to the binary when it is imported
+ * from Node rather than from inside Electron, which is the only resolution that survives
+ * a hoisted or relocated `node_modules`. The hard-coded path is kept as a fallback for a
+ * layout where the import is unavailable.
+ */
+async function electronBinary() {
+  try {
+    const mod = await import('electron')
+    const resolved = typeof mod.default === 'string' ? mod.default : null
+    if (resolved !== null && fs.existsSync(resolved)) return resolved
+  } catch {
+    // Fall through to the conventional location.
+  }
+  const guess = path.join(
+    root,
+    'node_modules',
+    'electron',
+    'dist',
+    process.platform === 'win32' ? 'electron.exe' : 'electron',
+  )
+  return fs.existsSync(guess) ? guess : null
+}
+
+let electron = await electronBinary()
+
+if (electron === null) {
+  // `npm ci` can leave the package present with its binary absent — a skipped or failed
+  // postinstall does exactly that, and `ELECTRON_SKIP_BINARY_DOWNLOAD` is tested for
+  // truthiness, so even "0" skips the download. Fetching it once here is cheap next to a
+  // release that silently stops checking whether the application starts.
+  console.log('The Electron binary is missing; running `npm rebuild electron` once.')
+  const rebuild = spawnSync('npm', ['rebuild', 'electron'], {
+    cwd: root,
+    encoding: 'utf8',
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+    timeout: 600_000,
+  })
+  if (rebuild.status !== 0) console.log(`npm rebuild electron exited ${rebuild.status}`)
+  electron = await electronBinary()
+}
+
+if (electron === null) {
+  console.error(
+    'smoke failed: the Electron binary is not installed and could not be fetched.\n' +
+      'This job needs the real binary. Check that ELECTRON_SKIP_BINARY_DOWNLOAD is empty\n' +
+      'for it — the variable is tested for truthiness, so even "0" skips the download.',
+  )
   process.exit(1)
 }
+
+console.log(`Electron: ${electron}`)
 
 console.log(`Launching the application, writing frames to ${out}`)
 const run = spawnSync(electron, ['.', '--capture', `--capture-out=${out}`], {

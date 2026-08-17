@@ -32,9 +32,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
         env:
-          # Windows also starts the application (see the smoke step), so it needs the
-          # real binary. Ubuntu only type-checks against Electron.
-          ELECTRON_SKIP_BINARY_DOWNLOAD: ${{ matrix.os == 'windows-latest' && '0' || '1' }}
+          # Windows also starts the application (see the smoke step), so it needs the real
+          # binary; ubuntu only type-checks against Electron. The value must be EMPTY to
+          # download, not "0" — Electron's installer tests the variable for truthiness, and
+          # the string "0" is truthy, which is exactly how the first version of this step
+          # skipped the download and then failed for want of a binary.
+          ELECTRON_SKIP_BINARY_DOWNLOAD: ${{ matrix.os == 'windows-latest' && '' || '1' }}
 
       - name: Validate the electron-builder configuration
         run: npm run check:build
