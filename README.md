@@ -22,6 +22,18 @@ The installer is not code-signed, so SmartScreen will warn the first time you ru
 release is built in public by GitHub Actions from the source in this repository, and you can
 [build it yourself](#building-it-yourself) instead.
 
+![A spring farm at midday: tilled rows of crops at different growth stages beside a plank
+farmhouse, with rocks, fallen logs and a pond on the valley floor](docs/shots/farm-spring-midday.png)
+
+<p align="center">
+  <img src="docs/shots/farm-evening.png" width="49%" alt="The farm in the evening, washed in warm lantern light" />
+  <img src="docs/shots/farm-winter.png" width="49%" alt="The farm in winter: pale frosted grass, drifting snow, bare trees" />
+</p>
+
+These are real frames, not mock-ups. They are produced by `tests/shots.test.ts`, which drives
+the game's own art modules through a small software rasteriser and writes the PNGs directly —
+see [Screenshots](#screenshots).
+
 ## Features
 
 - Four seasons of 28 days each, a day that runs 6:00 AM to 2:00 AM, and a year that turns
@@ -108,6 +120,29 @@ downloaded at runtime.
 
 The shipped application has no runtime dependencies. Everything in `package.json` is a
 development dependency: TypeScript, Vite, vitest, Electron and electron-builder.
+
+## Screenshots
+
+```
+SHOTS=1 npx vitest run tests/shots.test.ts
+```
+
+Writes real frames to `docs/shots/`. It is skipped by a normal `npm test`.
+
+The renderer is worth explaining, because the obvious approach does not work. Win32
+`PrintWindow` returns solid black for any Chromium window — the page is composited on a
+surface the OS cannot read back — and on a GPU-less off-screen desktop the renderer never
+even reaches `dom-ready`, so an automated Electron capture hangs rather than failing.
+
+The art layer, though, only ever makes nine 2D-context calls: `fillRect`, `fillStyle`,
+`save`, `restore`, `translate`, `scale`, `beginPath`, `rect` and `clip`. So the shot renderer
+implements exactly those nine, drives the **real** drawing modules against a real game state,
+and rasterises the result into a PNG with nothing but `zlib`. No browser, no GPU, no
+dependencies, and deterministic — the same seed always produces the same image.
+
+It covers the world layer. The HUD and tool belt are drawn by the scene layer, which needs a
+live input and UI instance, so the frames are cropped to the world band rather than faking
+chrome that would not be real.
 
 ## License
 
