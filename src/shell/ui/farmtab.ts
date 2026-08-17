@@ -27,7 +27,7 @@
  */
 
 import { CROPS } from '../../game/crops'
-import type { Quality, Season } from '../../game/types'
+import type { GameState, Quality, Season } from '../../game/types'
 import { mount } from '../../renderer/main'
 import type { GameHandle, GameMessageChannel, PresentedMessage } from '../../renderer/main'
 import type { ToastTone } from '../../renderer/scene'
@@ -333,6 +333,10 @@ export interface FarmTab {
   focus(): void
   /** Writes the game save now. The game keeps its own save; the shell store is separate. */
   saveNow(): void
+  /** The live game state, or null before the farm has booted. Read-only by contract. */
+  state(): GameState | null
+  /** Hands a state a shell surface produced back to the running game. */
+  apply(state: GameState): void
   destroy(): void
 }
 
@@ -465,6 +469,12 @@ export function createFarmTab(): FarmTab {
     },
     focus(): void {
       game.canvas.focus()
+    },
+    state(): GameState | null {
+      return game.state()
+    },
+    apply(next: GameState): void {
+      game.apply(next)
     },
     saveNow(): void {
       game.saveNow()

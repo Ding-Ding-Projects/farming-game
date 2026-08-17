@@ -10,7 +10,196 @@ build time, so what you see in the app is what is in the repository.
 
 ## [Unreleased]
 
-Nothing yet. The next change lands here.
+The game is redrawn. The framebuffer doubles to 640 x 448 and the tile doubles with it to
+32 x 32, which is four times the pixels per sprite and the whole point of the exercise. The
+valley is the same twenty by eleven tiles, whole on screen, with no camera: the resolution
+went into detail, not into scrolling. The rules layer did not learn a single new number —
+`src/game` is byte-for-byte unchanged — and the window is still 1280 x 896, now a clean 2x.
+`docs/GRAPHICS.md` is the contract this was built to.
+
+Reduced motion drops every particle, every ambient sway and every glow pulse, and never the
+walk cycle or a tool swing. There are tests for both halves of that now, and for the light
+and weather layers staying inside the world band, and for the glyph tables keeping the
+literal shape the landing page parses.
+
+### Added
+
+#### The world
+
+- **Every ground type redrawn at 32 px**, with eight structural variants per season chosen
+  from the tile's own seed, and **edge transitions** between them — grass meeting soil,
+  soil meeting path, land meeting water. A field no longer reads as a checkerboard.
+- Water gets a depth gradient, a shimmer on the 6 fps beat, an animated shoreline foam, a
+  reflection of whatever stands beside it, and an ice sheet with cracks in winter.
+- Tilled soil has real furrows with a lit crest and a shadowed trough, and standing water
+  in the trough when it is watered. Snow settles on the top edge of everything.
+- **Thirty-three crops and fourteen fruit trees**, drawn at every growth stage, plus the
+  withered state, plus a seed packet and a three-quality produce icon each.
+
+#### Things that stand on the ground
+
+- **Twenty buildings** and **thirty factory machines**, each with its own silhouette, its
+  own seasonal dress, and — for a machine — idle, working and holding-output states.
+- **Twelve animal species**, each with a baby, an adult and an unwell look.
+- The farmer is rebuilt as a real character rig: four facings, a four-frame walk, a
+  three-frame tool swing for each of the seven tools, and an idle breathe.
+- **213 products and twelve materials** get individual 24 px icons, graded by quality.
+- A new **7 x 9 body face** for every label and readout. The old 5 x 7 face is kept for
+  dense numeric readouts and tight belt labels. The landing page reads both straight out
+  of `src/engine/font.ts`, so the new type flowed through with no hand editing.
+
+#### Light, weather and motion
+
+- Light composites over the world band only: a cold wash burning off through the morning,
+  the lantern gold of the good hour, night easing in from eight, and warm pools spilling
+  out of the farmhouse windows and door once it is dark.
+- Rain, storm and snow, each in two depths with splash rings and occasional lightning.
+- Particles with a real budget: dirt clods with gravity, a splash ring on watering, a
+  produce pop that arcs to the gold readout on harvest, sparkles on gold quality, steam
+  off a working machine, leaf fall in autumn.
+
+#### Drawing primitives
+
+- `ellipse`, `shadeRect` and a five-tone `ramp()` in `src/engine`, so every sprite in the
+  game is shaded by one rule and the light falls from the upper left everywhere.
+
+### Changed
+
+- Screenshots are rendered at the new resolution and four new scenes were added to the
+  set: an autumn orchard, a coop and barn with the animals out, a working production yard,
+  and a placement ghost held over the crop rows. The landing page ships the new frames.
+- The minimum whole-number upscale drops from 2 to 1: 640 x 448 at 1x already fills more
+  of a window than 320 x 224 did at 2x.
+- Panel and frame dimensions doubled with the framebuffer: a 6 px wood frame, a 2 px ink
+  outline, a 4 px hard shadow.
+
+### Fixed
+
+- A water tile's glint drew its soft lens one pixel to the left of the tile. Ground is
+  painted in one pass from left to right, so that pixel landed on a neighbour that was
+  already finished and stayed there — a stray blue speck on the bank of every pond.
+- `UI.button` still inset its state fill and its disabled dither by the 16 px-era two
+  pixels, which painted over the bark of the doubled frame and flattened every hovered,
+  selected and disabled button into an ink-ringed slab. The shop's plates had inherited
+  the same number. Both now inset by four and share one constant.
+- `UI.panel` set its title four pixels down, which was the interior of the old 4 px frame
+  and is the middle of the new 8 px one.
+- The disabled dither on a button used a 1 px checker, which reads as flat grey at this
+  size rather than as texture; it matches the shop's 2 px checker now.
+- The landing page was still shipping 960 x 528 screenshots of the 16 px art, with those
+  dimensions hard-coded in `index.html`.
+
+## [1.1.0] - 2026-08-16
+
+The farm becomes a business. Animals, buildings, factories, a market that moves, and a
+hundred levels of things to reach for. Version 1.0 saves load straight into it.
+
+### Added
+
+#### Land, animals and buildings
+
+- The valley is divided into eight **regions**. You start owning the home meadow only;
+  the rest is bought with gold **and** a land deed, and until you own it you cannot clear
+  it. Deeds come from level rewards and boat crates, so land is the one thing gold alone
+  never finishes.
+- **Clearing now pays.** Every rock, log and patch of weeds yields materials — wood,
+  stone, fibre, and occasionally a plank, nail, screw, bolt or duct tape — and three
+  experience. Twelve materials in all, and none of them is ever bought or sold.
+- **Twenty buildings**, placed anywhere you have cleared, with a per-tile ghost that tints
+  each square of the footprint so you can see which corner is the problem before you
+  commit. Nothing is spent until the build succeeds. Buildings can be moved for a small
+  fee, and pulled down — the animals inside ride along, or are rehoused, or are sold at
+  half price, and the plan tells you which before it happens.
+- **Twelve species of animal**, each housed in the buildings that will take it. They eat
+  from the silo or graze where the season allows, gain and lose friendship, fall ill if
+  neglected or left out overnight, and produce on their own clock. Friendship drives both
+  how much they give and how good it is.
+- Hay: cut grass into the silo through autumn, feed it through winter.
+
+#### Factories and the chains
+
+- **Thirty factories** and **195 recipes** turning raw goods into **213 products**.
+  Machines stand on one tile, hold a visible queue, and work through it overnight.
+- **Quality carries the whole way down a chain.** A gold wheat makes gold flour makes gold
+  bread, and the price multiplies at every step. A batch is graded by its best ingredient,
+  and exactly one unit of that grade is taken to set the mark — the rest of your gold
+  stays yours to sell.
+- Chains run three deep on purpose: wheat to flour to bread, milk to cream to cheese, wool
+  to cloth to fabric.
+- A job that finishes into a full barn is **held in the machine** and reported in the
+  morning, never destroyed.
+
+#### The economy
+
+- Prices move. Every sellable good carries a live supply index: selling floods it, and it
+  decays back toward neutral each day at its own rate. Staples barely shift; wine, truffle
+  and cheese swing hard.
+- A per-good, per-season demand multiplier, and **one market event a week** — bumper
+  harvest, shortage, festival, trade caravan, or a quiet week — rolled from the seed and
+  announced in the morning report the day it starts.
+- **Five ways to sell**: the shipping bin at the closing price, the town market at ten per
+  cent more for an hour's walk, the roadside stall where you name the price and the town
+  decides how fast it moves, delivery orders at an agreed premium, and boat crates for
+  several goods at once.
+- **Reputation**, 0 to 1000, starting at 250: it gates the order tiers, scales every sale
+  between 0.95x and 1.08x, and is shown as a named rank with the number beside it.
+- **Loans and tax.** Borrow against your standing and your farm, pay interest at the end
+  of each season, and pay a flat levy on the season's net earnings — itemised as gross,
+  expenses, taxable, rate and amount due. Nothing is repossessed and nothing ends the run.
+
+#### Levels, storage and the ladder
+
+- **A hundred levels**, each one opening something real — 161 rungs in all across crops,
+  trees, animals, buildings, factories, recipes, regions, storage and selling channels.
+  Experience is paid for doing: harvesting, collecting, finishing a machine job, filling an
+  order, clearing land, raising a building.
+- **Two capped stores.** The silo holds crops and seeds and starts at 150; the barn store
+  holds animal produce, artisan goods, purchased supplies and bulk materials and starts at
+  200. Both extend twenty times, for gold and for materials that cannot be bought.
+- **A full store never eats your work.** A harvest the silo cannot take is refused and the
+  crop keeps standing. A purchase with no shelf for it is refused before you are charged.
+  A machine holds what will not fit. The stall will not be pulled down with stock still on
+  it. Every refusal names the store, the shortfall and what to do about it.
+- **Thirty-three crops** (up from fifteen) and **fourteen fruit trees**, spanning all four
+  seasons.
+
+#### The morning report
+
+- The overnight pass now runs, in this order: the weather falls and crops grow; animals
+  eat, lose friendship if they went hungry, tick their produce clocks and come in from the
+  field; machines work their queues; the stall sells; on the last night of a season
+  interest accrues and the levy is assessed; the calendar turns; the market heals, the
+  week's event is rolled, orders expire and are topped back up, and the day's closing
+  prices go into the ledger.
+- The report counts what each pass actually did — animals fed and unfed, animals unwell,
+  produce waiting, machine jobs finished and blocked, stall units and gold, orders failed,
+  the event that began, interest, the season's levy and every level crossed.
+
+#### The Ledger
+
+- A new shell tab: price history as a chart, income and expenses by source and season,
+  orders available and accepted, loans with a repay control, and reputation. Every table
+  has its own search field with its own anchored regex builder and its own catalogue row,
+  and the whole ledger exports as JSON, CSV or Markdown.
+
+### Changed
+
+- `GameState` gains `buildings`, `animals`, `machines`, `hay`, `progression`, `market`,
+  `orders`, `loans` and `stall`. `Tile` gains `buildingId` and `machineId`, mirrored from
+  the authoritative lists after every verb, so occupancy is answerable per tile.
+- `ItemRef` gains a `product` variant that carries quality through the factory chains and a
+  `material` variant that never carries one. Keying, naming, pricing, storage routing,
+  saving, the inventory screen, the shop screen and the Ledger all handle both.
+- `addItem` consults the store cap itself, so no route into the bag can overflow a shelf.
+- Harvesting now pays experience, and a harvest is all-or-nothing against the silo.
+- The general store buys artisan products over the counter at the catalogue price. It does
+  not trade materials.
+
+### Fixed
+
+- A save written by 1.0 loads: every new field arrives at its documented default — level
+  one, the home meadow owned, a neutral market, no debt — and a single bad row inside a
+  new collection is dropped rather than failing the whole file.
 
 ## [1.0.0] - 2026-08-16
 

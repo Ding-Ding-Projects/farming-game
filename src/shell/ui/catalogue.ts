@@ -147,6 +147,43 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     labelKey: 'search.appearance.label',
     placeholderKey: 'search.appearance.placeholder',
   },
+
+  /* -- the ledger, one field per section -- */
+  {
+    id: 'ledger.prices',
+    where: 'src/shell/ui/ledger.ts',
+    constant: 'LEDGER_SEARCH_FIELD_IDS.prices',
+    labelKey: 'common.search',
+    placeholderKey: 'search.crops.placeholder',
+  },
+  {
+    id: 'ledger.income',
+    where: 'src/shell/ui/ledger.ts',
+    constant: 'LEDGER_SEARCH_FIELD_IDS.income',
+    labelKey: 'common.search',
+    placeholderKey: 'search.history.placeholder',
+  },
+  {
+    id: 'ledger.orders',
+    where: 'src/shell/ui/ledger.ts',
+    constant: 'LEDGER_SEARCH_FIELD_IDS.orders',
+    labelKey: 'common.search',
+    placeholderKey: 'search.history.placeholder',
+  },
+  {
+    id: 'ledger.loans',
+    where: 'src/shell/ui/ledger.ts',
+    constant: 'LEDGER_SEARCH_FIELD_IDS.loans',
+    labelKey: 'common.search',
+    placeholderKey: 'search.history.placeholder',
+  },
+  {
+    id: 'ledger.reputation',
+    where: 'src/shell/ui/ledger.ts',
+    constant: 'LEDGER_SEARCH_FIELD_IDS.reputation',
+    labelKey: 'common.search',
+    placeholderKey: 'search.history.placeholder',
+  },
 ])
 
 /** The row for one field id, or `undefined` when the catalogue has never heard of it. */

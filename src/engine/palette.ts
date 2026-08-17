@@ -118,3 +118,88 @@ export function shade(hex: string, amount: number): string {
     byte(b + (tb - b) * k),
   )
 }
+
+/* ------------------------------------------------------------------------ *
+ * Five-tone ramps
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The five tones every 32 px sprite is built from, in order from dark to light.
+ * `docs/GRAPHICS.md` section 5: "`ink` outline, a dark side, a mid body, a lit edge,
+ * and a `cream` specular where the light catches."
+ *
+ * It is a labelled tuple, so a lane may take it apart either way — by name for
+ * readability, or by index when walking the ramp:
+ *
+ *     const r = ramp(PAL.grass)
+ *     px(ctx, x, y, r.lit)
+ *     for (let i = 0; i < r.length; i++) hline(ctx, x, y + i, 8, r[i])
+ */
+export interface Ramp {
+  /** Outline. `hex` pulled almost all the way to `ink`, so the line keeps a hint of hue. */
+  readonly ink: string
+  /** The side facing away from the light — lower right. */
+  readonly dark: string
+  /** The body. `hex` itself, normalised to a six-digit lower-case triple. */
+  readonly mid: string
+  /** The edge the light falls on — upper left. */
+  readonly lit: string
+  /** The specular glint, near `cream`. Small: a few pixels, never a whole face. */
+  readonly spec: string
+  readonly length: 5
+  readonly [index: number]: string
+}
+
+/**
+ * Where each tone sits between `ink` (-1) and `cream` (+1). Tuned so the five steps
+ * stay distinct on every palette entry, including the already-dark ones like `leaf`.
+ */
+const RAMP_STOPS = [-0.78, -0.42, 0, 0.34, 0.78] as const
+
+/**
+ * Ramps are pure functions of their base colour and there are only a few dozen base
+ * colours in the whole game, so every ramp is computed once and handed back on every
+ * later call. The cap is a safety valve for callers that build colours dynamically —
+ * it can never make a ramp wrong, only recompute one.
+ */
+const RAMP_CACHE = new Map<string, Ramp>()
+const RAMP_CACHE_CAP = 512
+
+/**
+ * The five-tone ramp for a base colour, computed with `shade` so that every sprite in
+ * the game shades by the same rule. Cheap to call per sprite per frame: memoised, and
+ * the returned object is frozen and shared, never a fresh allocation.
+ *
+ * A colour `shade` does not understand comes back as five copies of itself rather than
+ * throwing mid-frame — the sprite reads flat, which is visible, instead of vanishing.
+ */
+export function ramp(hex: string): Ramp {
+  const cached = RAMP_CACHE.get(hex)
+  if (cached !== undefined) return cached
+
+  const t0 = shade(hex, RAMP_STOPS[0])
+  const t1 = shade(hex, RAMP_STOPS[1])
+  const t2 = shade(hex, RAMP_STOPS[2])
+  const t3 = shade(hex, RAMP_STOPS[3])
+  const t4 = shade(hex, RAMP_STOPS[4])
+
+  // Named and indexed views of the same five strings — plain data, so reading a tone
+  // inside a per-pixel loop is a property load and nothing more.
+  const built = Object.freeze({
+    0: t0,
+    1: t1,
+    2: t2,
+    3: t3,
+    4: t4,
+    ink: t0,
+    dark: t1,
+    mid: t2,
+    lit: t3,
+    spec: t4,
+    length: 5 as const,
+  }) as Ramp
+
+  if (RAMP_CACHE.size >= RAMP_CACHE_CAP) RAMP_CACHE.clear()
+  RAMP_CACHE.set(hex, built)
+  return built
+}

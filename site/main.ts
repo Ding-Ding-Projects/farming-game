@@ -1,10 +1,12 @@
 /**
  * Landing page behaviour.
  *
- * The wordmark is drawn with the game's own 5x7 bitmap face rather than a web font,
- * so the page and the game are literally set in the same type. Everything else here
- * is progressive enhancement: with scripting off, the page still describes the game
- * and every download button still resolves to the latest release on GitHub.
+ * The wordmark is drawn with the game's own 7x9 body bitmap face rather than a web font,
+ * so the page and the game are literally set in the same type. It reads the face straight
+ * out of `src/engine/font.ts`, so the framebuffer doubling flowed through here with no
+ * hand editing. Everything else is progressive enhancement: with scripting off, the page
+ * still describes the game and every download button still resolves to the latest release
+ * on GitHub.
  */
 import { drawText, textWidth, FONT_H } from '../src/engine/font'
 import { PAL } from '../src/engine/palette'

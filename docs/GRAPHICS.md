@@ -1,48 +1,103 @@
-# Graphics contract — 640 × 360
+# Graphics contract — 640 × 448
 
 **This document supersedes `DESIGN.md` sections 1–9.** Section 10 (the application shell)
 still stands. `DESIGN.md` will be folded into this once the shell wave has landed; where the
 two disagree until then, this wins.
 
 The change: the framebuffer doubles and the tile doubles with it. Four times the pixels per
-sprite, a world larger than one screen, and animation everywhere something is alive.
+sprite, and animation everywhere something is alive. The world itself does not change size.
 
 ## 1. The frame
 
 | | Was | Now |
 |---|---|---|
-| Framebuffer | 320 × 224 | **640 × 360** |
+| Framebuffer | 320 × 224 | **640 × 448** |
 | Tile | 16 × 16 | **32 × 32** |
-| Farm | 20 × 11, all visible | **32 × 24, camera-scrolled** |
-| Upscale | whole numbers, min 2 | whole numbers, min 1 (2× = 1280 × 720) |
+| Farm | 20 × 11, all visible | **20 × 11, all visible** |
+| Bands | HUD 24 / world 176 / belt 24 | **HUD 48 / world 352 / belt 48** |
+| Window | 1280 × 896 | 1280 × 896 |
+| Upscale | whole numbers, min 2 | whole numbers, min 1 (2× = 1280 × 896) |
+
+640 × 448 is **exactly twice** 320 × 224 in both axes, and 32 is exactly twice 16. That one
+decision is what the rest of this document rests on. Every layout constant in
+`src/game/constants.ts` simply doubled; not one of them changed meaning.
 
 Everything else about the frame is unchanged and non-negotiable: integer pixel coordinates,
 nearest-neighbour upscaling only, never a fractional scale, letterbox the remainder in `ink`.
 
-## 2. The camera
+## 2. No camera
 
-The farm is 1024 × 768 world pixels and the viewport is 640 × 360, so the world no longer
-fits on screen. That is deliberate — buildings need room and a farm you can walk out of
-feels bigger than one you can see all of.
+**There is no camera. The whole farm is on screen, all of the time.**
 
-- The camera follows the farmer with a **deadzone**: it does not move until the farmer
-  leaves the middle 192 × 112 box, then eases at 8 px/frame until they are centred again.
-- It **clamps to the world bounds** — the player never sees past the edge of the valley.
-- It rounds to whole pixels before drawing. A camera on a half pixel smears every sprite.
-- Placement mode (see `docs/GAMEPLAY.md`) may pan the camera independently of the farmer.
+The farm is 20 × 11 tiles. At 32 px that is 640 × 352 world pixels, which is precisely the
+world band of a 640 × 448 framebuffer. A tile's screen position is therefore, always and
+everywhere:
+
+```
+sx = tileX * TILE
+sy = WORLD_Y + tileY * TILE
+```
+
+No scroll offset, no deadzone, no clamp, no rounding of a camera to a whole pixel because
+there is no camera to round. Nothing in `src/art` takes a viewport argument.
+
+### Why the resolution doubled instead of the grid
+
+An earlier draft of this contract called for a 32 × 24 farm scrolled by a camera. That was
+dropped, and the reasoning is the point of this section.
+
+The goal of the art wave was **four times the pixels per sprite** — enough room for the
+five-tone ramp of section 5, which is most of what "more detail" actually means. A bigger
+grid delivers none of that. It is an orthogonal change that happens to cost a great deal.
+
+Doubling the framebuffer buys the whole gain and costs nothing outside `src/art`:
+
+- The 20 × 11 grid is unchanged, so tile indices, `FARM_W`/`FARM_H`, the save format and
+  every index-keyed structure in `src/game` are untouched.
+- The band layout is unchanged in proportion — HUD, world, belt — so the HUD is still a
+  band and not an overlay, and the world band is still exactly the farm.
+- The window is unchanged at 1280 × 896, which is now a clean 2× rather than a 4×.
+- 866 tests keep passing without an edit, because the rules layer never learned a new number.
+
+Resizing the grid instead would have rippled through the rules layer and its tests: the
+farmhouse footprint and doorstep in `game/placement.ts`, the eight region rectangles in
+`game/regions.ts` that tile the farm exactly once with no gaps, placement reachability,
+the map generator's corner pond, save compatibility, and every fixture that names a tile by
+index. All of that, and the sprites would still have been 16 px.
+
+### What we gave up, and where the room comes from instead
+
+A scrolling world does feel bigger. We do not get that. What the player gets instead is the
+**region ladder** in `game/regions.ts`: the farm starts as one owned meadow surrounded by
+seven regions that belong to the town until a deed and a fee say otherwise. Room is bought,
+not walked to — and because the whole farm is visible, the land you do not own yet is on
+screen from day one, which is a better advertisement for buying it than a horizon is.
+
+### What this means for the art layer
+
+- A sprite may overhang its own tile — a mature fruit tree's canopy is forty-one pixels
+  across and reaches twelve above its own tile — but it may **never** leave the world band.
+  A canopy that would reach into the HUD gives up its overhang and squats instead.
+- Draw order is row order. Everything standing on the ground is bucketed by the row it
+  touches and painted far row first, so a near sprite overlaps a far one. A building sorts
+  by the **bottom** row of its footprint, because that is the row it stands on.
+- Placement mode does not pan anything. The footprint ghost is drawn in place, on the tiles
+  it would occupy, because they are already on screen.
 
 ## 3. Layout
 
-The HUD is now an **overlay**, not a band. The world renders across the entire framebuffer
-and the HUD and tool belt sit on top of it, so the viewport gains the 88 px the two bands
-used to cost.
+Three bands, exactly as before and exactly twice the size.
 
-- **HUD** — top 40 px. Date, clock, gold, energy, weather. A wood panel that stops short of
-  the full width so the valley is visible behind its ends.
-- **Tool belt** — bottom 56 px, centred, only as wide as its contents.
-- **Light and weather layers composite over the world only** — they are drawn *before* the
-  HUD and belt, which are never dimmed. This replaces the old clip-to-world-band rule: the
-  clip is now the whole framebuffer, and correctness comes from draw order.
+- **HUD** — top 48 px (`HUD_H`). Date, clock, gold, energy, weather, on a wood panel.
+- **World** — `WORLD_Y` = 48, `WORLD_H` = 352. The farm, whole.
+- **Tool belt** — bottom 48 px from `BELT_Y` = 400. Tool icons, the selected seed, and the
+  readout for the tile ahead.
+
+Light and weather composite **over the world band only**. Both install exactly one clip of
+the world rectangle and always close it again, so the HUD and the belt are never dimmed and
+never rained on. Anything that is interface rather than scenery — the placement ghost — is
+drawn after the light layer for the same reason: a preview you cannot read at dusk is no
+preview.
 
 ## 4. Type
 
@@ -97,6 +152,11 @@ when a chicken is startled, steam from a working machine, leaf fall in autumn.
 sway and every glow pulse to a static frame — but **never** the walk cycle or a tool swing,
 because those communicate state rather than decorate it.
 
+The beat comes from `beatOf(frame)` in `src/art/tiles.ts`, where `frame` is the renderer's
+60 fps counter; it returns zero under reduced motion, which is what freezes everything that
+should freeze in one place. A sprite that takes no `frame` argument reads the same beat
+through `setAmbientFrame` in `src/art/scenery.ts`.
+
 ## 7. Tiles
 
 Every ground type gets four seasonal variants **and edge transitions** — grass meeting soil,
@@ -109,9 +169,38 @@ is not optional.
 - Tilled soil shows real furrows with a lit crest and a shadowed trough.
 - Snow accumulates on the top edge of everything, including buildings and machines.
 
+Every pixel a transition paints lands inside the 32 × 32 box of the tile that owns it — it
+never reaches into the neighbour that caused it — so `drawGroundEdges` is safe to call
+immediately after `drawGround` for the same tile inside a single loop. A transition can
+therefore never be overwritten by a later tile.
+
 ## 8. What does not change
 
 Sections 6 (UI), 7 (sound), 8 (what this is not) and 9 (accessibility) of `DESIGN.md` carry
-over verbatim, with panel and frame dimensions doubled. In particular: no border radius, no
-blurred shadow, no gradient except the sky, no emoji in the game surface, and every action
-reachable from the keyboard with a live region mirroring state changes.
+over verbatim, with panel and frame dimensions doubled: a 3 px wood frame is 6 px, the 1 px
+ink outline is 2 px, the hard panel shadow is 4 px down-right, and the selected belt tool
+sits 4 px above its neighbours. In particular: no border radius, no blurred shadow, no
+gradient except the sky, no emoji in the game surface, and every action reachable from the
+keyboard with a live region mirroring state changes.
+
+## 9. Seeing it
+
+Electron cannot be photographed in this environment: Win32 `PrintWindow` returns solid black
+for Chromium, and on a GPU-less off-screen desktop the renderer never reaches `dom-ready`.
+So `tests/shots.test.ts` implements the nine 2D-context calls the art layer actually uses —
+`fillStyle`, `fillRect`, `save`, `restore`, `translate`, `scale`, `beginPath`, `rect`,
+`clip` — drives the real drawing modules against a real `GameState`, and writes PNGs itself.
+The pixels are the game's own.
+
+```
+npm run shots                                  # writes docs/shots/*.png at 2x,
+                                               # then publishes them to site/shots/
+```
+
+It is skipped unless `SHOTS=1`, and CI runs it on every push and uploads the frames. Two
+consequences worth knowing:
+
+- **Reach for a tenth context call and the shots break.** That is deliberate. Nine calls is
+  a small enough surface to reimplement honestly; a canvas gradient or a `drawImage` is not.
+- Each frame is checked for luminance spread, distinct colour count and unpainted pixels. A
+  PNG of a uniform colour is a failed render wearing a filename.

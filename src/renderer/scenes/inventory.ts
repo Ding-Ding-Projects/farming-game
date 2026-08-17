@@ -1,56 +1,84 @@
+/**
+ * The bag, at 640x448.
+ *
+ * A ten-by-six grid of 40 px pockets — sixty visible lots against the old thirty-two,
+ * which is what the doubled framebuffer buys. The 24 px item icons the art lanes draw
+ * sit inside a pocket with room around them instead of filling it edge to edge, and
+ * every pocket is drawn whether it holds anything or not, so a bag with room left
+ * still looks made.
+ */
 import type { InventoryEntry, ItemRef } from '../../game/types'
 import type { PointerState } from '../../engine/input'
 import type { Scene, SceneCommand, SceneContext } from '../scene'
-import { LOGICAL_W, WORLD_Y } from '../../game/constants'
+import { LOGICAL_H, LOGICAL_W, WORLD_Y } from '../../game/constants'
 import { itemName } from '../../game/state'
 import { selectSeed, setTool } from '../../game/actions'
 import { cropById } from '../../game/crops'
+import { productById } from '../../game/products'
+import { treeById } from '../../game/trees'
 import { sellValue } from '../../game/shop'
 import { PAL } from '../../engine/palette'
 import { drawText, drawTextCentered, textWidth } from '../../engine/font'
 import { dither, hline, outline, rect, woodPanel } from '../../engine/pixel'
+import { BUTTON_INSET } from '../../engine/ui'
 import { playSound } from '../../engine/audio'
 import { mixHex } from '../../art/tiles'
 import { drawSeedIcon, drawProduceIcon } from '../../art/plants'
 import { drawGoodIcon } from '../../art/actors'
+import { ICON, drawMaterialIcon, drawProductIcon } from '../../art/goods'
 
-const PANEL_X = 32
-const PANEL_Y = WORLD_Y + 4
+const PANEL_X = 64
+const PANEL_Y = WORLD_Y + 8
 const PANEL_W = LOGICAL_W - PANEL_X * 2
-const PANEL_H = 164
+const PANEL_H = 344
 
-const COLS = 8
-const ROWS = 4
-const CELL = 26
+/** Inside the 6 px wood frame and its 2 px ink outline. */
+const INNER_X = PANEL_X + 16
+const INNER_W = PANEL_W - 32
+
+const COLS = 10
+const ROWS = 6
+const CELL = 40
+/** The art lanes draw every loose item at `ICON` px, centred in the pocket. */
+const ICON_OFF = (CELL - ICON) >> 1
+
 const GRID_X = PANEL_X + Math.floor((PANEL_W - COLS * CELL) / 2)
-const GRID_Y = PANEL_Y + 20
+const GRID_Y = PANEL_Y + 48
 
-const DETAIL_Y = PANEL_Y + PANEL_H - 30
+const DETAIL_Y = PANEL_Y + PANEL_H - 42
 const QUIET = mixHex(PAL.ink, PAL.parchment, 0.4)
 const RECESS = mixHex(PAL.parchment, PAL.soil, 0.45)
+const POCKET_EDGE = mixHex(PAL.parchment, PAL.ink, 0.2)
 
-const CLOSE_W = 44
-const CLOSE_H = 13
-const CLOSE_X = PANEL_X + PANEL_W - CLOSE_W - 6
-const CLOSE_Y = PANEL_Y + PANEL_H - CLOSE_H - 6
+const CLOSE_W = 76
+const CLOSE_H = 28
+const CLOSE_X = PANEL_X + PANEL_W - CLOSE_W - 16
+const CLOSE_Y = PANEL_Y + PANEL_H - CLOSE_H - 14
 
 function inside(p: PointerState, x: number, y: number, w: number, h: number): boolean {
   return p.x >= x && p.x < x + w && p.y >= y && p.y < y + h
 }
 
-function drawIcon(
-  ctx: CanvasRenderingContext2D,
-  item: ItemRef,
-  x: number,
-  y: number,
-): void {
+function drawIcon(ctx: CanvasRenderingContext2D, item: ItemRef, x: number, y: number): void {
   if (item.kind === 'good') {
     drawGoodIcon(ctx, item.goodId, x, y)
     return
   }
-  const crop = cropById(item.cropId)
+  if (item.kind === 'material') {
+    drawMaterialIcon(ctx, item.materialId, x, y)
+    return
+  }
+  if (item.kind === 'product') {
+    const product = productById(item.productId)
+    if (product === undefined) outline(ctx, x + 6, y + 6, 12, 12, PAL.dusk)
+    else drawProductIcon(ctx, product, item.quality, x, y)
+    return
+  }
+  // Fruit trees share the seed and produce variants with the crops, so both catalogues
+  // are asked before the icon falls back to an empty box.
+  const crop = cropById(item.cropId) ?? treeById(item.cropId)
   if (crop === undefined) {
-    outline(ctx, x + 2, y + 2, 8, 8, PAL.dusk)
+    outline(ctx, x + 6, y + 6, 12, 12, PAL.dusk)
     return
   }
   if (item.kind === 'seed') drawSeedIcon(ctx, crop, x, y)
@@ -60,19 +88,30 @@ function drawIcon(
 function detailNote(item: ItemRef, count: number): string {
   switch (item.kind) {
     case 'seed': {
-      const crop = cropById(item.cropId)
+      const crop = cropById(item.cropId) ?? treeById(item.cropId)
       const seasons = crop === undefined ? '' : crop.seasons.join('/').toUpperCase()
       return `${seasons} SEED - ENTER LOADS IT`
     }
-    case 'produce': {
+    case 'produce':
+    case 'product': {
       const unit = sellValue(item)
+      if (unit <= 0) return `${count} IN THE BAG`
       return `${unit}G EACH - ${unit * count}G THE LOT`
     }
     case 'good':
       return item.goodId === 'sprinkler'
         ? 'ENTER HOLDS IT FOR PLACING'
         : 'ENTER HOLDS IT FOR SPREADING'
+    case 'material':
+      return `${count} IN STOCK - BUILDING AND EXTENDING SPENDS IT`
   }
+}
+
+/** One empty pocket: a dithered recess with a lit upper-left lip, light from up-left. */
+function pocket(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  dither(ctx, x + 3, y + 3, CELL - 6, CELL - 6, RECESS, 0, 2)
+  outline(ctx, x + 2, y + 2, CELL - 4, CELL - 4, POCKET_EDGE)
+  hline(ctx, x + 3, y + 3, CELL - 6, mixHex(PAL.parchment, PAL.cream, 0.6))
 }
 
 export function createInventoryScene(): Scene {
@@ -136,15 +175,12 @@ export function createInventoryScene(): Scene {
 
       // ---- panel -------------------------------------------------------
       woodPanel(g, PANEL_X, PANEL_Y, PANEL_W, PANEL_H)
-      drawTextCentered(g, 'THE BAG', PANEL_X + PANEL_W / 2, PANEL_Y + 6, PAL.ink)
-      hline(g, PANEL_X + 6, PANEL_Y + 15, PANEL_W - 12, PAL.bark)
+      drawTextCentered(g, 'THE BAG', PANEL_X + PANEL_W / 2, PANEL_Y + 14, PAL.ink)
+      hline(g, INNER_X, PANEL_Y + 32, INNER_W, PAL.bark)
 
       // Empty pockets are drawn too: a bag with room left still looks made.
       for (let slot = 0; slot < COLS * ROWS; slot++) {
-        const cx = GRID_X + (slot % COLS) * CELL
-        const cy = GRID_Y + Math.floor(slot / COLS) * CELL
-        dither(g, cx + 2, cy + 2, CELL - 4, CELL - 4, RECESS)
-        outline(g, cx + 1, cy + 1, CELL - 2, CELL - 2, mixHex(PAL.parchment, PAL.ink, 0.2))
+        pocket(g, GRID_X + (slot % COLS) * CELL, GRID_Y + Math.floor(slot / COLS) * CELL)
       }
 
       for (let i = 0; i < count; i++) {
@@ -156,16 +192,20 @@ export function createInventoryScene(): Scene {
         const chosen = i === selected
         const hovered = inside(p, cx, cy, CELL, CELL)
 
-        dither(g, cx + 2, cy + 2, CELL - 4, CELL - 4, RECESS)
-        if (chosen) rect(g, cx + 2, cy + 2, CELL - 4, CELL - 4, PAL.lantern)
-        else if (hovered) dither(g, cx + 2, cy + 2, CELL - 4, CELL - 4, PAL.lantern, 1)
-        outline(g, cx + 1, cy + 1, CELL - 2, CELL - 2, chosen ? PAL.ink : mixHex(PAL.parchment, PAL.ink, 0.35))
-        if (chosen) outline(g, cx, cy, CELL, CELL, PAL.cream)
+        pocket(g, cx, cy)
+        if (chosen) rect(g, cx + 3, cy + 3, CELL - 6, CELL - 6, PAL.lantern)
+        else if (hovered) dither(g, cx + 3, cy + 3, CELL - 6, CELL - 6, PAL.lantern, 1, 2)
+        outline(g, cx + 2, cy + 2, CELL - 4, CELL - 4, chosen ? PAL.ink : POCKET_EDGE)
+        if (chosen) {
+          outline(g, cx, cy, CELL, CELL, PAL.cream)
+          outline(g, cx + 1, cy + 1, CELL - 2, CELL - 2, PAL.cream)
+        }
 
-        drawIcon(g, entry.item, cx + 7, cy + 5)
+        drawIcon(g, entry.item, cx + ICON_OFF, cy + ICON_OFF - 3)
 
         const label = `${entry.count}`
-        drawText(g, label, cx + CELL - 4 - textWidth(label), cy + CELL - 11, PAL.ink, {
+        drawText(g, label, cx + CELL - 6 - textWidth(label, 1, true), cy + CELL - 12, PAL.ink, {
+          small: true,
           shadow: PAL.cream,
         })
       }
@@ -175,7 +215,7 @@ export function createInventoryScene(): Scene {
           g,
           'THE BAG IS EMPTY.',
           PANEL_X + PANEL_W / 2,
-          GRID_Y + CELL,
+          GRID_Y + CELL * 2,
           QUIET,
         )
       }
@@ -183,30 +223,38 @@ export function createInventoryScene(): Scene {
       const rowsTotal = Math.ceil(count / COLS)
       if (rowsTotal > ROWS) {
         const tag = `ROW ${scroll + 1}-${Math.min(rowsTotal, scroll + ROWS)} OF ${rowsTotal}`
-        drawText(g, tag, PANEL_X + PANEL_W - 8 - textWidth(tag), PANEL_Y + 6, QUIET)
+        drawText(g, tag, PANEL_X + PANEL_W - 16 - textWidth(tag), PANEL_Y + 14, QUIET)
       }
+      drawText(g, `${count} LOTS`, INNER_X, PANEL_Y + 14, QUIET)
 
       // ---- detail ------------------------------------------------------
-      hline(g, PANEL_X + 6, DETAIL_Y - 4, PANEL_W - 12, PAL.bark)
+      hline(g, INNER_X, DETAIL_Y - 8, INNER_W, PAL.bark)
       if (count > 0) {
         const entry = entries[selected]
-        drawText(g, `${itemName(entry.item)} X${entry.count}`, PANEL_X + 8, DETAIL_Y, PAL.ink, {
-          maxWidth: PANEL_W - 16,
+        drawText(g, `${itemName(entry.item)} X${entry.count}`, INNER_X, DETAIL_Y, PAL.ink, {
+          maxWidth: CLOSE_X - 16 - INNER_X,
         })
-        drawText(g, detailNote(entry.item, entry.count), PANEL_X + 8, DETAIL_Y + 10, QUIET, {
-          maxWidth: PANEL_W - 16 - CLOSE_W,
+        drawText(g, detailNote(entry.item, entry.count), INNER_X, DETAIL_Y + 16, QUIET, {
+          maxWidth: CLOSE_X - 16 - INNER_X,
         })
       } else {
-        drawText(g, 'SOW SOMETHING AND COME BACK.', PANEL_X + 8, DETAIL_Y, QUIET)
+        drawText(g, 'SOW SOMETHING AND COME BACK.', INNER_X, DETAIL_Y, QUIET)
       }
 
       woodPanel(g, CLOSE_X, CLOSE_Y, CLOSE_W, CLOSE_H, { thin: true })
       if (inside(p, CLOSE_X, CLOSE_Y, CLOSE_W, CLOSE_H)) {
-        rect(g, CLOSE_X + 2, CLOSE_Y + 2, CLOSE_W - 4, CLOSE_H - 4, PAL.lantern)
+        rect(
+          g,
+          CLOSE_X + BUTTON_INSET,
+          CLOSE_Y + BUTTON_INSET,
+          CLOSE_W - BUTTON_INSET * 2,
+          CLOSE_H - BUTTON_INSET * 2,
+          PAL.lantern,
+        )
       }
-      drawTextCentered(g, 'ESC', CLOSE_X + CLOSE_W / 2, CLOSE_Y + 3, PAL.ink)
+      drawTextCentered(g, 'ESC', CLOSE_X + CLOSE_W / 2, CLOSE_Y + 10, PAL.ink)
 
-      ctx.toastY = PANEL_Y + PANEL_H + 26
+      ctx.toastY = LOGICAL_H - 8
 
       // ---- act ---------------------------------------------------------
       if (take && count > 0) {
@@ -224,7 +272,12 @@ export function createInventoryScene(): Scene {
           return { kind: 'pop' }
         }
         playSound('deny')
-        ctx.say('PRODUCE SELLS AT THE SHOP - PRESS B.', 'info')
+        ctx.say(
+          item.kind === 'material'
+            ? 'MATERIALS ARE SPENT ON BUILDING, NOT CARRIED.'
+            : 'PRODUCE AND GOODS SELL AT THE SHOP - PRESS B.',
+          'info',
+        )
       }
 
       if (input.pressed('Escape') || input.pressed('KeyI')) return { kind: 'pop' }

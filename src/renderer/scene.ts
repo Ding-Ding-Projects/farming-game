@@ -16,7 +16,17 @@ import { FONT_H, drawText, textWidth } from '../engine/font'
 import { rect, woodPanel } from '../engine/pixel'
 import { beatOf } from '../art/tiles'
 
-export type SceneId = 'title' | 'world' | 'shop' | 'inventory' | 'sleep' | 'help'
+export type SceneId =
+  | 'title'
+  | 'world'
+  | 'shop'
+  | 'inventory'
+  | 'sleep'
+  | 'help'
+  // Opened by walking up to a structure and using it, rather than from a key.
+  | 'building'
+  | 'machine'
+  | 'stall'
 
 /**
  * What a scene asks the shell to do after it has drawn. `newGame` and `loadGame`

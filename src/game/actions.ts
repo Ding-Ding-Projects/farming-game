@@ -25,7 +25,6 @@ import {
   FARM_W,
 } from './constants'
 import {
-  addItem,
   cloneState,
   countItem,
   facingIndex,
@@ -37,6 +36,21 @@ import {
 import { cropById, isRipe } from './crops'
 import { randInt, rngFor } from './rng'
 import { nextSeason } from './time'
+import { absoluteDay, dailyRecovery, eventBeginsToday, recordPrices, refreshEvent } from './economy'
+import { nightlyLivestock } from './livestock'
+import { accrueInterest, expireOrders, nightlyStall, offerOrders, seasonalTax, totalDebt } from './market'
+import { clearingSource, rollMaterials } from './materials'
+import { nightlyProduction } from './production'
+import {
+  addMaterials,
+  depositItem,
+  formatMaterials,
+  grantXp,
+  isTileOwned,
+  spaceCheck,
+  xpFor,
+} from './progression'
+import { regionAt } from './regions'
 
 /** Gold docked when the farmer is carried home unconscious. */
 const MEDICAL_FEE = 50
@@ -338,7 +352,15 @@ export function harvest(state: GameState, index: number): ActionResult {
   const amount = Math.max(1, randInt(rand, crop.yieldMin, crop.yieldMax))
   const quality = rollQuality(rand, plant.fertilized, plant.regrown)
 
-  const s = addItem(state, { kind: 'produce', cropId: crop.id, quality }, amount)
+  // The silo has to take the whole crop before the plant gives it up, and it is all or
+  // nothing: a plant left standing keeps every unit, where a part-picked one would drop the
+  // remainder on the floor. `docs/PROGRESSION.md` §5 — a harvest never quietly evaporates.
+  const picked: ItemRef = { kind: 'produce', cropId: crop.id, quality }
+  const room = spaceCheck(state, picked, amount)
+  if (!room.ok) return refuse(state, `${room.message} THE ${name} KEEPS UNTIL YOU DO.`)
+
+  const deposit = depositItem(state, picked, amount)
+  const s = deposit.state
   const t = s.tiles[index]
   const regrowing = crop.regrowDays !== null && t.plant !== null
 
@@ -352,15 +374,20 @@ export function harvest(state: GameState, index: number): ActionResult {
     t.plant = null
   }
 
-  s.stats.harvested += amount
+  s.stats.harvested += deposit.stored
   spend(s, ENERGY_COST.harvest)
 
   const fx: Fx[] = [{ kind: 'pop', index }]
   if (quality === 'gold') fx.push({ kind: 'sparkle', index })
 
+  // Two experience a unit, per `docs/PROGRESSION.md` §1. Paid on what reached the silo.
+  const awarded = grantXp(s, xpFor('harvest', deposit.stored), 'harvest')
+  const top = awarded.leveled[awarded.leveled.length - 1]
+  const levelled = top === undefined ? '' : ` LEVEL ${top}!`
+
   const suffix = quality === 'normal' ? '' : ` - ${quality.toUpperCase()}!`
   const tail = regrowing ? ' IT WILL BEAR AGAIN.' : ''
-  return done(s, `PICKED ${amount} ${name}${suffix}.${tail}`, 'harvest', fx)
+  return done(awarded.state, `PICKED ${amount} ${name}${suffix}.${tail}${levelled}`, 'harvest', fx)
 }
 
 export function clearDebris(state: GameState, index: number): ActionResult {
@@ -375,15 +402,50 @@ export function clearDebris(state: GameState, index: number): ActionResult {
   const cost = debrisCost(tile.ground)
   if (state.energy < cost) return refuse(state, 'YOU ARE TOO TIRED FOR THAT.')
 
+  // Past the fence it is not yours yet, per `docs/PROGRESSION.md` §3: buying a region is
+  // what makes its tiles clearable, and clearing is what pays out the materials.
+  const x = index % FARM_W
+  const y = Math.floor(index / FARM_W)
+  if (!isTileOwned(state, x, y)) {
+    const region = regionAt(x, y)
+    return refuse(
+      state,
+      region === null
+        ? 'THAT GROUND IS NOT YOURS.'
+        : `${region.name} IS NOT YOURS YET - BUY THE PLOT FIRST.`,
+    )
+  }
+
   const message = debrisCleared(tile.ground)
-  const s = cloneState(state)
+  const ground = tile.ground
+  let s = cloneState(state)
   const t = s.tiles[index]
   t.ground = 'grass'
   t.watered = false
   t.fertilized = false
   t.plant = null
   spend(s, cost)
-  return done(s, message, 'chop', [{ kind: 'leaf', index }])
+
+  // What the swing turned up. `materials.ts` owns the drop table; the roll is salted with
+  // the date and the tile, so a save replays the same haul.
+  const source = clearingSource(ground)
+  let haul = ''
+  if (source !== null) {
+    const drop = rollMaterials(
+      source,
+      state.seed,
+      `clear:${state.year}:${state.season}:${state.day}:${index}`,
+    )
+    if (Object.keys(drop).length > 0) {
+      s = addMaterials(s, drop)
+      haul = ` ${formatMaterials(drop)}.`
+    }
+  }
+
+  const awarded = grantXp(s, xpFor('clear'), 'clear')
+  const top = awarded.leveled[awarded.leveled.length - 1]
+  const levelled = top === undefined ? '' : ` LEVEL ${top}!`
+  return done(awarded.state, `${message}${haul}${levelled}`, 'chop', [{ kind: 'leaf', index }])
 }
 
 export function placeSprinkler(state: GameState, index: number): ActionResult {
@@ -492,14 +554,40 @@ function runSprinklers(tiles: Tile[]): void {
   }
 }
 
+/**
+ * One night.
+ *
+ * The passes run in the order `docs/GAMEPLAY.md` §5 sets out, and the report counts what
+ * each pass actually did rather than estimating it:
+ *
+ *  1. the weather falls, sprinklers run, crops drink and grow or wither
+ *  2. animals eat, the unfed lose friendship, produce clocks tick, the herd comes in
+ *  3. machines work through their queue and finish into the barn, or are blocked by it
+ *  4. the roadside stall sells overnight at the price the player named
+ *  5. on the last night of a season: interest accrues and the levy is assessed
+ *  6. the calendar turns
+ *  7. the market heals, the week's event is rolled, orders expire and are topped back up,
+ *     and today's closing prices go into the ledger
+ *  8. the farmer wakes, and the forecast for tonight is rolled
+ *
+ * Steps 5 and 6 are in that order deliberately: the levy is assessed against the season that
+ * is ending, and it opens the next season's books, so it has to run while the date still says
+ * the old season. Everything in step 7 is keyed to the *new* day and runs after the turn.
+ *
+ * A single generator threads the whole night, so one seed replays one night exactly.
+ */
 export function sleep(state: GameState): { state: GameState; report: DayReport } {
-  const s = cloneState(state)
+  let s = cloneState(state)
   const rand = rngFor(s.seed, `night:${s.year}:${s.season}:${s.day}`)
 
   // The forecast the player went to bed on is the weather that actually falls.
   const night = s.tomorrow
   const dayEnded = s.day
   const passedOut = s.passedOut
+  const levelBefore = s.progression.level
+
+  // Set before any pass reads it: the animals care about the weather they stood out in.
+  s.weather = night
 
   runSprinklers(s.tiles)
   if (wetsEverything(night)) {
@@ -546,7 +634,38 @@ export function sleep(state: GameState): { state: GameState; report: DayReport }
 
   for (const t of s.tiles) t.watered = false
 
-  s.weather = night
+  // ---- 2. the animals -----------------------------------------------------
+  const barnyard = nightlyLivestock(s, rand)
+  s = barnyard.state
+
+  // ---- 3. the machines ----------------------------------------------------
+  const workshop = nightlyProduction(s)
+  s = workshop.state
+
+  // ---- 4. the roadside stall ----------------------------------------------
+  const stall = nightlyStall(s, rand)
+  s = stall.state
+
+  // ---- 5. the books, on the last night of the season ----------------------
+  let interestAccrued = 0
+  let tax: DayReport['tax'] = null
+  if (dayEnded >= DAYS_PER_SEASON) {
+    const owedBefore = totalDebt(s)
+    s = accrueInterest(s)
+    interestAccrued = Math.max(0, totalDebt(s) - owedBefore)
+
+    const levy = seasonalTax(s)
+    s = levy.state
+    tax = {
+      gross: levy.gross,
+      expenses: levy.expenses,
+      taxable: levy.taxable,
+      rate: levy.rate,
+      due: levy.due,
+    }
+  }
+
+  // ---- 6. the calendar turns ----------------------------------------------
   s.day += 1
   let seasonChanged = false
   if (s.day > DAYS_PER_SEASON) {
@@ -569,6 +688,16 @@ export function sleep(state: GameState): { state: GameState; report: DayReport }
     }
   }
 
+  // ---- 7. the market, on the new day --------------------------------------
+  s = dailyRecovery(s)
+  s = refreshEvent(s)
+  const expired = expireOrders(s)
+  s = expired.state
+  s = offerOrders(s, rand)
+  s = recordPrices(s)
+  const eventBegan = eventBeginsToday(s.market.event, absoluteDay(s)) ? s.market.event : null
+
+  // ---- 8. the farmer wakes ------------------------------------------------
   s.tomorrow = rollWeather(rand, s.season)
 
   const cap = Math.min(s.maxEnergy, ENERGY_CAP)
@@ -587,6 +716,10 @@ export function sleep(state: GameState): { state: GameState; report: DayReport }
   s.stats.daysPlayed += 1
   s.stats.withered += withered
 
+  // Levels can be crossed by a machine finishing overnight, so the morning says so.
+  const leveled: number[] = []
+  for (let level = levelBefore + 1; level <= s.progression.level; level++) leveled.push(level)
+
   const report: DayReport = {
     grew,
     withered,
@@ -597,6 +730,19 @@ export function sleep(state: GameState): { state: GameState; report: DayReport }
     outOfSeason,
     passedOut,
     medicalFee,
+    fed: barnyard.fed,
+    unfed: barnyard.unfed,
+    produced: barnyard.produced,
+    machinesFinished: workshop.finished,
+    machinesBlocked: workshop.blocked,
+    animalsUnwell: barnyard.unwell,
+    stallSold: stall.sold,
+    stallEarned: stall.earned,
+    ordersFailed: expired.failed,
+    eventBegan,
+    interestAccrued,
+    tax,
+    leveled,
   }
   return { state: s, report }
 }

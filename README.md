@@ -11,7 +11,7 @@ ground full of weeds, rocks and fallen logs. Clear it, till it, sow it, water it
 what the year gives back. There is no timer pushing you and no way to lose. The whole screen
 is the game.
 
-Sprout Hollow is built with Electron, TypeScript and Vite. It renders to a single 320 x 224
+Sprout Hollow is built with Electron, TypeScript and Vite. It renders to a single 640 x 448
 canvas that is upscaled by a whole number to fit your window, so the pixels stay square and
 the edges stay hard.
 
@@ -19,8 +19,8 @@ the edges stay hard.
 dependency and will very likely run on either, but shipping a target nobody tests is worse
 than not shipping it, so only the Windows installer is published.
 
-**[Download the latest release](https://github.com/DingDingChae/sprout-hollow/releases/latest)**
-&nbsp;·&nbsp; [Website](https://dingdingchae.github.io/sprout-hollow/)
+**[Download the latest release](https://github.com/Ding-Ding-Projects/farming-game/releases/latest)**
+&nbsp;·&nbsp; [Website](https://ding-ding-projects.github.io/farming-game/)
 
 The installer is not code-signed, so SmartScreen will warn the first time you run it. Every
 release is built in public by GitHub Actions from the source in this repository, and you can
@@ -38,6 +38,42 @@ These are real frames, not mock-ups. They are produced by `tests/shots.test.ts`,
 the game's own art modules through a small software rasteriser and writes the PNGs directly —
 see [Screenshots](#screenshots).
 
+## Every building is a room you walk into
+
+A coop is not a menu. Walk up to its door, press the same button you use on a crop row, and
+you are inside it: a nest per bird along the wall, a feed trough, the hay, and whoever lives
+there standing in their pens. Tending an animal is the same act as watering a plant — face
+it, use it.
+
+<p align="center">
+  <img src="docs/shots/inside-coop.png" width="49%" alt="Inside a coop: chickens, a duck and a turkey standing in strawed pens along the wall, a hanging lamp overhead, a feed trough and a nest box" />
+  <img src="docs/shots/inside-barn.png" width="49%" alt="Inside a barn: cows, a goat and sheep in their stalls over a board floor scattered with straw" />
+</p>
+
+Using a pen does the most useful thing that is pending — collect what is ready, then feed,
+then pet — so there is one button and never a submenu. The trough feeds the whole building
+at once and the nest collects it.
+
+<p align="center">
+  <img src="docs/shots/inside-farmhouse.png" width="32%" alt="Inside the farmhouse: a bed with a quilt, a strapped chest and a standing desk with the order ledger open on it" />
+  <img src="docs/shots/inside-bakery.png" width="32%" alt="Inside the bakery: a chequered tile floor and three workbenches, one working and one holding finished output" />
+  <img src="docs/shots/inside-stall.png" width="32%" alt="Inside the roadside stall: six counters with scales, some stocked with produce and some bare" />
+</p>
+
+Production buildings are workrooms. The bakery carries a bench for every baking machine
+standing on the farm, so a run of jobs is queued in one place instead of walked to one tile
+at a time. The roadside stall gives each of its six slots a counter you walk down and price.
+
+<p align="center">
+  <img src="docs/shots/inside-mine.png" width="32%" alt="Inside the mine: a hewn rock floor and walls under a single hanging lamp" />
+  <img src="docs/shots/inside-greenhouse.png" width="32%" alt="Inside the greenhouse: glazed walls and four raised beds of seedlings over worked soil" />
+  <img src="docs/shots/inside-silo.png" width="32%" alt="Inside the silo: corrugated metal walls and a stack of banded hay bales" />
+</p>
+
+Rooms are at most twenty tiles by eleven, which is exactly the size of the farm, so going
+through a door needs no camera and no second layout. The contract is
+[docs/INTERIORS.md](docs/INTERIORS.md).
+
 ## Features
 
 - Four seasons of 28 days each, a day that runs 6:00 AM to 2:00 AM, and a year that turns
@@ -49,8 +85,11 @@ see [Screenshots](#screenshots).
 - Tools with a cost: tilling, watering, sowing, harvesting, clearing debris, placing
   sprinklers and working fertilizer into the soil all spend energy and daylight. Run out of
   either and you are carried home, lighter in the pocket.
-- A shop that stocks the seeds of the current season plus sprinklers and fertilizer, and buys
-  your produce at normal, silver or gold quality.
+- A shop that stocks the seeds of the current season plus sprinklers and fertilizer, sells the
+  animals your buildings can house, and buys your produce at normal, silver or gold quality.
+- Twenty buildings, every one of them enterable: coops and barns with a pen per animal, a
+  farmhouse with a bed and an order ledger, workrooms with a bench per machine, a silo of hay,
+  and a roadside stall you walk down and price slot by slot.
 - Everything is deterministic: the same save always plays the same farm, because nothing in
   the rules layer reads the clock or calls the system random number generator.
 - Keyboard-first controls, a screen-reader live region mirroring the game state, and support
@@ -61,7 +100,9 @@ see [Screenshots](#screenshots).
 | Input | Does |
 |---|---|
 | Arrows / WASD | Walk, and face that way |
-| Space / Enter | Use the held tool on the faced tile |
+| Space / Enter | Use what is ahead: swing the held tool, open a machine, or go through a door |
+| Esc | Leave a room, or close the top panel |
+| L | Inside an animal building, its occupants as a list |
 | 1 - 7 | Pick hoe, can, seeds, hand, axe, sprinkler, fertilizer |
 | Q / E | Cycle the selected seed |
 | B | Shop |
@@ -69,7 +110,6 @@ see [Screenshots](#screenshots).
 | N | Sleep |
 | H / F1 | Help |
 | M | Mute |
-| Esc | Close the top panel |
 
 The mouse is optional: every action is reachable from the keyboard.
 
@@ -147,30 +187,33 @@ never copied here. Run `npm run dish` to see the current one.
 
 ### Size of the tree
 
-As published by **v1.0.0**. This is a convenience copy; the release notes are the
-record. Reproduce it with `npm run count`.
+A convenience copy, regenerated when the tree changes; the release notes are the record,
+because they are produced by the run that built the release. Reproduce it with
+`npm run count`.
 
 | Area | Files | Lines |
 |---|---:|---:|
-| Game rules | 9 | 2,029 |
-| Engine | 6 | 1,285 |
-| Art | 4 | 1,891 |
-| Renderer | 10 | 2,493 |
-| Application shell | 27 | 25,548 |
+| Game rules | 27 | 16,293 |
+| Engine | 6 | 1,670 |
+| Art | 8 | 11,493 |
+| Renderer | 14 | 6,026 |
+| Application shell | 29 | 29,307 |
 | Electron | 3 | 523 |
-| Website | 3 | 704 |
-| Tests | 16 | 6,216 |
-| Scripts | 3 | 247 |
-| Documentation | 11 | 2,297 |
-| **Total** | **92** | **43,233** |
+| Website | 3 | 773 |
+| Tests | 34 | 13,566 |
+| Scripts | 5 | 357 |
+| Documentation | 12 | 2,893 |
+| **Total** | **141** | **82,901** |
 
 ## Screenshots
 
 ```
-SHOTS=1 npx vitest run tests/shots.test.ts
+npm run shots
 ```
 
-Writes real frames to `docs/shots/`. It is skipped by a normal `npm test`.
+Renders real frames into `docs/shots/` and publishes the set to `site/shots/` for the
+website. It is skipped by a normal `npm test`; `SHOTS=1` is what turns it on, and
+`npm run shots` sets that in a way that works on Windows as well as on a POSIX shell.
 
 The renderer is worth explaining, because the obvious approach does not work. Win32
 `PrintWindow` returns solid black for any Chromium window — the page is composited on a
@@ -183,9 +226,12 @@ implements exactly those nine, drives the **real** drawing modules against a rea
 and rasterises the result into a PNG with nothing but `zlib`. No browser, no GPU, no
 dependencies, and deterministic — the same seed always produces the same image.
 
-It covers the world layer. The HUD and tool belt are drawn by the scene layer, which needs a
-live input and UI instance, so the frames are cropped to the world band rather than faking
-chrome that would not be real.
+It covers the world layer and the interiors. The room shots go through the very same
+`drawRoom` the game calls every frame, against a real `interiorFor` derived from a real save,
+so a picture of a coop that looks wrong is the coop being wrong rather than the picture.
+
+The HUD and tool belt are drawn by the scene layer, which needs a live input and UI instance,
+so the frames are cropped to the world band rather than faking chrome that would not be real.
 
 ## License
 
