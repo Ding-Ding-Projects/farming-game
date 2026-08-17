@@ -122,11 +122,23 @@ jobs:
           }
           $counts = (npm run count --silent) -join "`n"
 
+          # The code name comes from the public dim-sum catalogue, fetched now. If
+          # that catalogue cannot be read the script exits non-zero rather than
+          # inventing a dish, and the release simply carries no code name.
+          $dish = ""
+          try {
+            $dish = (npm run dish --silent) -join "`n"
+            if ($LASTEXITCODE -ne 0) { $dish = "" }
+          } catch { $dish = "" }
+          if ($dish) { $dish = "## Code name`n`n$dish`n" }
+
           $body = @"
           Sprout Hollow ${{ steps.v.outputs.tag }} for Windows.
 
           Built by GitHub Actions from ``$env:GITHUB_SHA`` on this run. Typecheck and the
           full test suite ran and passed in this same job before packaging.
+
+          $dish
 
           ## Install
 

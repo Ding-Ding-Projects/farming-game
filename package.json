@@ -17,7 +17,8 @@
     "test:watch": "vitest",
     "package": "npm run build && electron-builder --win squirrel --publish never",
     "count": "node scripts/count-lines.mjs",
-    "check:build": "node scripts/check-build-config.mjs"
+    "check:build": "node scripts/check-build-config.mjs",
+    "dish": "node scripts/dish-name.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

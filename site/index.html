@@ -10,7 +10,7 @@
     />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://api.github.com"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://github.com https://objects.githubusercontent.com; connect-src https://api.github.com https://raw.githubusercontent.com"
     />
     <meta property="og:title" content="Sprout Hollow" />
     <meta
@@ -45,6 +45,18 @@
     </header>
 
     <main>
+      <section class="dish" id="dish-section" aria-label="This release's code name" hidden>
+        <h2>This release is <span id="dish-name"></span></h2>
+        <a id="dish-link" href="https://github.com/Ding-Ding-Projects/dim-sum-photos">
+          <img id="dish-photo" alt="" width="360" height="360" loading="lazy" />
+        </a>
+        <p class="note">
+          Every release takes its code name from the public
+          <a href="https://github.com/Ding-Ding-Projects/dim-sum-photos">dim sum catalogue</a>.
+          The photograph is linked from there, never copied here.
+        </p>
+      </section>
+
       <section class="shots" id="shots" aria-label="Screenshots">
         <figure>
           <img
