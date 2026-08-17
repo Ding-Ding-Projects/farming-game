@@ -193,7 +193,8 @@ So `tests/shots.test.ts` implements the nine 2D-context calls the art layer actu
 The pixels are the game's own.
 
 ```
-SHOTS=1 npx vitest run tests/shots.test.ts     # writes docs/shots/*.png at 2x
+npm run shots                                  # writes docs/shots/*.png at 2x,
+                                               # then publishes them to site/shots/
 ```
 
 It is skipped unless `SHOTS=1`, and CI runs it on every push and uploads the frames. Two

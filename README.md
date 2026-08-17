@@ -187,30 +187,33 @@ never copied here. Run `npm run dish` to see the current one.
 
 ### Size of the tree
 
-As published by **v1.0.0**. This is a convenience copy; the release notes are the
-record. Reproduce it with `npm run count`.
+A convenience copy, regenerated when the tree changes; the release notes are the record,
+because they are produced by the run that built the release. Reproduce it with
+`npm run count`.
 
 | Area | Files | Lines |
 |---|---:|---:|
-| Game rules | 9 | 2,029 |
-| Engine | 6 | 1,285 |
-| Art | 4 | 1,891 |
-| Renderer | 10 | 2,493 |
-| Application shell | 27 | 25,548 |
+| Game rules | 27 | 16,293 |
+| Engine | 6 | 1,670 |
+| Art | 8 | 11,493 |
+| Renderer | 14 | 6,026 |
+| Application shell | 29 | 29,307 |
 | Electron | 3 | 523 |
-| Website | 3 | 704 |
-| Tests | 16 | 6,216 |
-| Scripts | 3 | 247 |
-| Documentation | 11 | 2,297 |
-| **Total** | **92** | **43,233** |
+| Website | 3 | 773 |
+| Tests | 34 | 13,566 |
+| Scripts | 5 | 357 |
+| Documentation | 12 | 2,893 |
+| **Total** | **141** | **82,901** |
 
 ## Screenshots
 
 ```
-SHOTS=1 npx vitest run tests/shots.test.ts
+npm run shots
 ```
 
-Writes real frames to `docs/shots/`. It is skipped by a normal `npm test`.
+Renders real frames into `docs/shots/` and publishes the set to `site/shots/` for the
+website. It is skipped by a normal `npm test`; `SHOTS=1` is what turns it on, and
+`npm run shots` sets that in a way that works on Windows as well as on a POSIX shell.
 
 The renderer is worth explaining, because the obvious approach does not work. Win32
 `PrintWindow` returns solid black for any Chromium window — the page is composited on a
