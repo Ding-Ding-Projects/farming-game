@@ -180,6 +180,28 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "${{ steps.v.outputs.tag }}"
+
+          # GitHub's own API answers 503 and 429 often enough to have cost this project a
+          # red release for a build that was entirely sound: everything typechecked, every
+          # test passed and the installer packaged, and then the publish call came back
+          # "no server is currently available". A transient upstream failure is not a
+          # failure of the release, so every call that talks to the API is retried.
+          #
+          # Retries are safe here because each call is idempotent in the state it leaves
+          # behind: PATCH of a tag ref sets it, `release edit` sets the notes, and upload
+          # uses --clobber. Re-running one is the same as running it once.
+          function Invoke-WithRetry {
+            param([string]$What, [scriptblock]$Body, [int]$Tries = 5)
+            for ($i = 1; $i -le $Tries; $i++) {
+              & $Body
+              if ($LASTEXITCODE -eq 0) { return }
+              if ($i -eq $Tries) { throw "$What failed after $Tries attempts (exit $LASTEXITCODE)" }
+              $wait = [Math]::Min(60, [Math]::Pow(2, $i) * 5)
+              "$What failed (exit $LASTEXITCODE). Retrying in $wait seconds - attempt $($i + 1) of $Tries."
+              Start-Sleep -Seconds $wait
+            }
+          }
+
           $exists = $false
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) { $exists = $true }
@@ -191,16 +213,24 @@ jobs:
             # the tag stays pinned to whichever commit first published this version
             # while the artifacts and the notes move on, and the two quietly disagree
             # about what was actually released.
-            gh api -X PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" `
-              -f sha="$env:GITHUB_SHA" -F force=true | Out-Null
+            Invoke-WithRetry "Moving tag $tag" {
+              gh api -X PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" `
+                -f sha="$env:GITHUB_SHA" -F force=true | Out-Null
+            }
             "Moved tag $tag to $env:GITHUB_SHA"
 
-            gh release edit $tag --notes-file release-notes.md --title "Sprout Hollow $tag" --draft=false --latest
-            gh release upload $tag (Get-ChildItem staging -File | ForEach-Object { $_.FullName }) --clobber
+            Invoke-WithRetry "Editing release $tag" {
+              gh release edit $tag --notes-file release-notes.md --title "Sprout Hollow $tag" --draft=false --latest
+            }
+            Invoke-WithRetry "Uploading assets to $tag" {
+              gh release upload $tag (Get-ChildItem staging -File | ForEach-Object { $_.FullName }) --clobber
+            }
           } else {
             "Creating release $tag."
-            gh release create $tag (Get-ChildItem staging -File | ForEach-Object { $_.FullName }) `
-              --title "Sprout Hollow $tag" --notes-file release-notes.md --latest
+            Invoke-WithRetry "Creating release $tag" {
+              gh release create $tag (Get-ChildItem staging -File | ForEach-Object { $_.FullName }) `
+                --title "Sprout Hollow $tag" --notes-file release-notes.md --latest
+            }
           }
 
       - name: Confirm the release is downloadable
@@ -209,11 +239,31 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "${{ steps.v.outputs.tag }}"
-          $json = gh release view $tag --json isDraft,assets,tagName | ConvertFrom-Json
+
+          # Read-only, and retried for the same reason the publish step is: a 503 here
+          # would fail a release that is already published and downloadable, which would
+          # be a lie in the opposite direction.
+          function Read-WithRetry {
+            param([string]$What, [scriptblock]$Body, [int]$Tries = 5)
+            for ($i = 1; $i -le $Tries; $i++) {
+              $out = & $Body
+              if ($LASTEXITCODE -eq 0) { return $out }
+              if ($i -eq $Tries) { throw "$What failed after $Tries attempts (exit $LASTEXITCODE)" }
+              $wait = [Math]::Min(60, [Math]::Pow(2, $i) * 5)
+              "$What failed (exit $LASTEXITCODE). Retrying in $wait seconds."
+              Start-Sleep -Seconds $wait
+            }
+          }
+
+          $json = (Read-WithRetry "Reading release $tag" {
+            gh release view $tag --json isDraft,assets,tagName
+          }) | ConvertFrom-Json
           if ($json.isDraft) { throw "the release is still a draft" }
 
           # The notes claim this release was built from GITHUB_SHA; prove the tag agrees.
-          $tagged = gh api "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" --jq .object.sha
+          $tagged = Read-WithRetry "Reading tag $tag" {
+            gh api "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" --jq .object.sha
+          }
           if ($tagged -ne $env:GITHUB_SHA) {
             throw "tag $tag points at $tagged but this release was built from $env:GITHUB_SHA"
           }
