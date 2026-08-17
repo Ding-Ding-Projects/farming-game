@@ -72,13 +72,18 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
-      # The shot renderer drives the real art modules. If someone changes a drawing
-      # signature, this fails here rather than silently rotting until the README is
-      # next regenerated.
+      # The shot renderer drives the real art modules, and the panel renderer drives the
+      # real scene code. If someone changes a drawing signature or lays a panel out
+      # wrongly, this fails here rather than silently rotting until the README is next
+      # regenerated.
+      #
+      # `npm run shots` rather than a vitest line of its own: this step used to name
+      # tests/shots.test.ts by hand and so rendered only half the matrix — the sixteen
+      # panel captures never ran in CI at all, along with the checks that they are
+      # reproducible. The npm script is the one supported way to produce the images, so
+      # calling it here is what stops CI and a developer's machine drifting apart again.
       - name: Render the screenshots
-        run: npx vitest run tests/shots.test.ts
-        env:
-          SHOTS: '1'
+        run: npm run shots
 
       - name: Upload the rendered frames
         uses: actions/upload-artifact@v4
