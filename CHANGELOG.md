@@ -10,7 +10,84 @@ build time, so what you see in the app is what is in the repository.
 
 ## [Unreleased]
 
-Nothing yet. The next change lands here.
+The game is redrawn. The framebuffer doubles to 640 x 448 and the tile doubles with it to
+32 x 32, which is four times the pixels per sprite and the whole point of the exercise. The
+valley is the same twenty by eleven tiles, whole on screen, with no camera: the resolution
+went into detail, not into scrolling. The rules layer did not learn a single new number —
+`src/game` is byte-for-byte unchanged — and the window is still 1280 x 896, now a clean 2x.
+`docs/GRAPHICS.md` is the contract this was built to.
+
+Reduced motion drops every particle, every ambient sway and every glow pulse, and never the
+walk cycle or a tool swing. There are tests for both halves of that now, and for the light
+and weather layers staying inside the world band, and for the glyph tables keeping the
+literal shape the landing page parses.
+
+### Added
+
+#### The world
+
+- **Every ground type redrawn at 32 px**, with eight structural variants per season chosen
+  from the tile's own seed, and **edge transitions** between them — grass meeting soil,
+  soil meeting path, land meeting water. A field no longer reads as a checkerboard.
+- Water gets a depth gradient, a shimmer on the 6 fps beat, an animated shoreline foam, a
+  reflection of whatever stands beside it, and an ice sheet with cracks in winter.
+- Tilled soil has real furrows with a lit crest and a shadowed trough, and standing water
+  in the trough when it is watered. Snow settles on the top edge of everything.
+- **Thirty-three crops and fourteen fruit trees**, drawn at every growth stage, plus the
+  withered state, plus a seed packet and a three-quality produce icon each.
+
+#### Things that stand on the ground
+
+- **Twenty buildings** and **thirty factory machines**, each with its own silhouette, its
+  own seasonal dress, and — for a machine — idle, working and holding-output states.
+- **Twelve animal species**, each with a baby, an adult and an unwell look.
+- The farmer is rebuilt as a real character rig: four facings, a four-frame walk, a
+  three-frame tool swing for each of the seven tools, and an idle breathe.
+- **213 products and twelve materials** get individual 24 px icons, graded by quality.
+- A new **7 x 9 body face** for every label and readout. The old 5 x 7 face is kept for
+  dense numeric readouts and tight belt labels. The landing page reads both straight out
+  of `src/engine/font.ts`, so the new type flowed through with no hand editing.
+
+#### Light, weather and motion
+
+- Light composites over the world band only: a cold wash burning off through the morning,
+  the lantern gold of the good hour, night easing in from eight, and warm pools spilling
+  out of the farmhouse windows and door once it is dark.
+- Rain, storm and snow, each in two depths with splash rings and occasional lightning.
+- Particles with a real budget: dirt clods with gravity, a splash ring on watering, a
+  produce pop that arcs to the gold readout on harvest, sparkles on gold quality, steam
+  off a working machine, leaf fall in autumn.
+
+#### Drawing primitives
+
+- `ellipse`, `shadeRect` and a five-tone `ramp()` in `src/engine`, so every sprite in the
+  game is shaded by one rule and the light falls from the upper left everywhere.
+
+### Changed
+
+- Screenshots are rendered at the new resolution and four new scenes were added to the
+  set: an autumn orchard, a coop and barn with the animals out, a working production yard,
+  and a placement ghost held over the crop rows. The landing page ships the new frames.
+- The minimum whole-number upscale drops from 2 to 1: 640 x 448 at 1x already fills more
+  of a window than 320 x 224 did at 2x.
+- Panel and frame dimensions doubled with the framebuffer: a 6 px wood frame, a 2 px ink
+  outline, a 4 px hard shadow.
+
+### Fixed
+
+- A water tile's glint drew its soft lens one pixel to the left of the tile. Ground is
+  painted in one pass from left to right, so that pixel landed on a neighbour that was
+  already finished and stayed there — a stray blue speck on the bank of every pond.
+- `UI.button` still inset its state fill and its disabled dither by the 16 px-era two
+  pixels, which painted over the bark of the doubled frame and flattened every hovered,
+  selected and disabled button into an ink-ringed slab. The shop's plates had inherited
+  the same number. Both now inset by four and share one constant.
+- `UI.panel` set its title four pixels down, which was the interior of the old 4 px frame
+  and is the middle of the new 8 px one.
+- The disabled dither on a button used a 1 px checker, which reads as flat grey at this
+  size rather than as texture; it matches the shop's 2 px checker now.
+- The landing page was still shipping 960 x 528 screenshots of the 16 px art, with those
+  dimensions hard-coded in `index.html`.
 
 ## [1.1.0] - 2026-08-16
 

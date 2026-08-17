@@ -12,11 +12,18 @@ import { PAL, shade } from './palette'
 import { woodPanel, rect, outline, dither, hline } from './pixel'
 import { drawText, drawTextCentered, FONT_H } from './font'
 
-/** A thin wood frame is 1 px ink outline + 1 px bark frame. */
-const BUTTON_INSET = 2
+/**
+ * `woodPanel`'s thin frame at the doubled scale of `docs/GRAPHICS.md` section 8: a 2 px
+ * ink outline over a 2 px bark frame. A state fill starts inside both, so a hovered or
+ * selected button keeps its carve instead of flattening into an ink-ringed slab.
+ */
+export const BUTTON_INSET = 4
 
-/** Height of the title strip inside a panel, when it has a title. */
-const TITLE_H = 13
+/** The full frame of a normal `woodPanel`: 2 px ink outline over a 6 px bark frame. */
+const PANEL_INSET = 8
+
+/** Top of the panel interior to the rule under a title. */
+const TITLE_H = PANEL_INSET + FONT_H + 4
 
 export interface ButtonOpts {
   disabled?: boolean
@@ -52,9 +59,9 @@ export class UI {
     if (ctx === null) return
     woodPanel(ctx, x, y, w, h)
     if (title !== undefined && title.length > 0) {
-      drawTextCentered(ctx, title, x + Math.floor(w / 2), y + 4, PAL.ink)
-      const inner = w - 8
-      if (inner > 0) hline(ctx, x + 4, y + TITLE_H, inner, PAL.bark)
+      drawTextCentered(ctx, title, x + Math.floor(w / 2), y + PANEL_INSET, PAL.ink)
+      const inner = w - PANEL_INSET * 2
+      if (inner > 0) hline(ctx, x + PANEL_INSET, y + TITLE_H, inner, PAL.bark)
     }
   }
 
@@ -130,8 +137,10 @@ export class UI {
       y + Math.max(0, Math.floor((h - FONT_H) / 2)),
       PAL.ink,
     )
-    // Dither last so the label is greyed out with the interior, not over it.
-    if (disabled && iw > 0 && ih > 0) dither(ctx, ix, iy, iw, ih, PAL.dusk)
+    // Dither last so the label is greyed out with the interior, not over it. The cell is
+    // 2 px because the framebuffer doubled: a 1 px checker over an area this size reads
+    // as flat grey rather than as texture (`engine/pixel.ts`, `dither`).
+    if (disabled && iw > 0 && ih > 0) dither(ctx, ix, iy, iw, ih, PAL.dusk, 0, 2)
     if (focused) outline(ctx, x, y, w, h, PAL.cream)
 
     return clicked

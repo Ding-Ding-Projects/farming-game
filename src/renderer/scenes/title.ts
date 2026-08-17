@@ -1,17 +1,26 @@
+/**
+ * The title screen, at 640x448.
+ *
+ * A painted valley at dusk with the wordmark over it: three ridge lines, a treeline on
+ * the middle one and a fence running along the near slope. The doubled framebuffer buys
+ * two real things here — the scenery trees and the fence posts are now drawn at their
+ * native 32 px instead of a 2x blow-up of 16 px art, and the wordmark is the 7x9 body
+ * face at 3x, which `docs/GRAPHICS.md` section 4 caps display type at.
+ */
 import type { Scene, SceneCommand, SceneContext } from '../scene'
-import { LOGICAL_H, LOGICAL_W } from '../../game/constants'
+import { LOGICAL_H, LOGICAL_W, TILE } from '../../game/constants'
 import { PAL, shade, withAlpha } from '../../engine/palette'
 import { drawText, drawTextCentered, textWidth } from '../../engine/font'
-import { hline, px, rect, woodPanel } from '../../engine/pixel'
+import { px, rect, woodPanel } from '../../engine/pixel'
 import { playSound, unlockAudio } from '../../engine/audio'
 import { artNoise, mixHex } from '../../art/tiles'
 import { drawFencePost, drawTree } from '../../art/scenery'
 import { createHelpScene } from './help'
 
-const HORIZON = 128
-const FAR_RIDGE = 118
-const MID_RIDGE = 142
-const NEAR_RIDGE = 168
+const HORIZON = 256
+const FAR_RIDGE = 236
+const MID_RIDGE = 284
+const NEAR_RIDGE = 336
 
 const SKY_TOP = mixHex(PAL.dusk, PAL.sky, 0.5)
 const SKY_LOW = mixHex(PAL.lantern, PAL.parchment, 0.45)
@@ -19,27 +28,38 @@ const FAR_HILL = mixHex(PAL.dusk, PAL.shadow, 0.45)
 const MID_HILL = shade(PAL.leaf, -0.35)
 const NEAR_HILL = shade(PAL.grass, -0.5)
 
-const BUTTON_W = 116
+const BUTTON_W = 232
 const BUTTON_X = Math.floor((LOGICAL_W - BUTTON_W) / 2)
-const BUTTON_H = 16
-const BUTTON_Y = 104
-const BUTTON_PITCH = 22
+const BUTTON_H = 30
+const BUTTON_Y = 208
+const BUTTON_PITCH = 42
+
+/** The confirmation over the wipe. Sized so neither answer sits under the other. */
+const CONFIRM_X = 96
+const CONFIRM_Y = 176
+const CONFIRM_W = LOGICAL_W - CONFIRM_X * 2
+const CONFIRM_H = 148
+const CONFIRM_BTN_W = 176
+const CONFIRM_BTN_H = 30
 
 /** A ridge line that wanders, so no hill reads as a rectangle. */
 function ridge(x: number, base: number, seed: number): number {
   const wobble =
-    3.2 * Math.sin(x * 0.041 + seed) +
-    1.8 * Math.sin(x * 0.113 + seed * 2.1) +
-    1.1 * Math.sin(x * 0.007 + seed * 0.6)
+    6.4 * Math.sin(x * 0.0205 + seed) +
+    3.6 * Math.sin(x * 0.0565 + seed * 2.1) +
+    2.2 * Math.sin(x * 0.0035 + seed * 0.6)
   return Math.round(base + wobble)
 }
 
 function hill(ctx: CanvasRenderingContext2D, base: number, seed: number, color: string): void {
   const lit = mixHex(color, PAL.cream, 0.16)
+  const rim = mixHex(color, PAL.cream, 0.3)
   for (let x = 0; x < LOGICAL_W; x++) {
     const top = ridge(x, base, seed)
     rect(ctx, x, top, 1, LOGICAL_H - top, color)
-    px(ctx, x, top, lit)
+    // Two pixels of rim light on the crest, because the sun is behind the ridge.
+    px(ctx, x, top, rim)
+    px(ctx, x, top + 1, lit)
   }
 }
 
@@ -61,19 +81,20 @@ function sky(ctx: CanvasRenderingContext2D): void {
   rect(ctx, 0, HORIZON, LOGICAL_W, LOGICAL_H - HORIZON, SKY_LOW)
 
   // A low sun sinking into the far ridge, with its halo, and streaked cloud above.
-  const sunX = 268
-  const sunY = FAR_RIDGE - 7
-  disc(ctx, sunX, sunY, 17, withAlpha(PAL.lantern, 0.1))
-  disc(ctx, sunX, sunY, 12, withAlpha(PAL.lantern, 0.14))
-  disc(ctx, sunX, sunY, 8, mixHex(PAL.lantern, PAL.cream, 0.3))
-  disc(ctx, sunX, sunY - 1, 4, mixHex(PAL.lantern, PAL.cream, 0.7))
+  const sunX = 536
+  const sunY = FAR_RIDGE - 14
+  disc(ctx, sunX, sunY, 34, withAlpha(PAL.lantern, 0.1))
+  disc(ctx, sunX, sunY, 24, withAlpha(PAL.lantern, 0.14))
+  disc(ctx, sunX, sunY, 16, mixHex(PAL.lantern, PAL.cream, 0.3))
+  disc(ctx, sunX, sunY - 2, 8, mixHex(PAL.lantern, PAL.cream, 0.7))
 
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 14; i++) {
     const cx = Math.floor(artNoise(i, 3) * LOGICAL_W)
-    const cy = 14 + Math.floor(artNoise(i, 4) * 70)
-    const w = 18 + Math.floor(artNoise(i, 5) * 34)
-    rect(ctx, cx, cy, w, 1, withAlpha(PAL.cream, 0.2))
-    rect(ctx, cx + 4, cy + 1, Math.max(6, w - 10), 1, withAlpha(PAL.cream, 0.12))
+    const cy = 28 + Math.floor(artNoise(i, 4) * 140)
+    const w = 36 + Math.floor(artNoise(i, 5) * 68)
+    rect(ctx, cx, cy, w, 2, withAlpha(PAL.cream, 0.2))
+    rect(ctx, cx + 8, cy + 2, Math.max(12, w - 20), 2, withAlpha(PAL.cream, 0.12))
+    rect(ctx, cx + 18, cy - 2, Math.max(8, w - 34), 1, withAlpha(PAL.cream, 0.1))
   }
 }
 
@@ -82,25 +103,40 @@ function valley(ctx: CanvasRenderingContext2D): void {
   hill(ctx, FAR_RIDGE, 0.4, FAR_HILL)
 
   // The treeline stands on the middle ridge, before the near hill buries its roots.
-  // Drawn at 2x: every tree pixel becomes a 2x2 block, so the wood keeps its scale.
-  for (let i = 0; i < 10; i++) {
-    const x = -14 + i * 36 + Math.floor(artNoise(i, 21) * 13)
-    ctx.save()
-    ctx.translate(x, ridge(x + 16, MID_RIDGE, 1.1) - 27)
-    ctx.scale(2, 2)
-    drawTree(ctx, 0, 0, artNoise(i, 22) > 0.7 ? 'fall' : 'summer', i)
-    ctx.restore()
+  // Native 32 px now: no `ctx.scale`, so the wood is drawn at the resolution it was
+  // authored for rather than as a doubled 16 px sprite.
+  for (let i = 0; i < 15; i++) {
+    const x = -20 + i * 46 + Math.floor(artNoise(i, 21) * 18)
+    const y = ridge(x + 18, MID_RIDGE, 1.1) - 26
+    drawTree(ctx, x, y, artNoise(i, 22) > 0.7 ? 'fall' : 'summer', i)
   }
   hill(ctx, MID_RIDGE, 1.1, MID_HILL)
   hill(ctx, NEAR_RIDGE, 2.3, NEAR_HILL)
 
-  // A fence line running along the near slope.
-  for (let i = 0; i < 11; i++) {
-    const x = -4 + i * 32
-    const y = ridge(x + 8, NEAR_RIDGE, 2.3) + 2
-    drawFencePost(ctx, x, y)
-    hline(ctx, x + 11, y + 6, 22, mixHex(PAL.bark, PAL.ink, 0.2))
-    hline(ctx, x + 11, y + 10, 22, mixHex(PAL.bark, PAL.ink, 0.35))
+  // A fence line running along the near slope. The rails reach both tile edges, so
+  // posts exactly one tile apart make an unbroken run.
+  for (let i = 0; i < 21; i++) {
+    const x = -TILE + i * TILE
+    drawFencePost(ctx, x, ridge(x + 16, NEAR_RIDGE, 2.3) + 4)
+  }
+
+  // Foreground turf below the fence, so the near slope is grass rather than a flat
+  // block of colour: tufts lit on their upper left, thinning as they recede.
+  const tuftLit = mixHex(NEAR_HILL, PAL.grassLit, 0.8)
+  const tuftMid = mixHex(NEAR_HILL, PAL.grassLit, 0.4)
+  const tuftDark = mixHex(NEAR_HILL, PAL.ink, 0.45)
+  for (let i = 0; i < 520; i++) {
+    const x = Math.floor(artNoise(i, 61) * LOGICAL_W)
+    const base = ridge(x, NEAR_RIDGE, 2.3) + 22
+    const y = base + Math.floor(artNoise(i, 62) * (LOGICAL_H - base))
+    if (y >= LOGICAL_H - 2) continue
+    // Nearer the camera means taller, so the slope has depth rather than a flat speckle.
+    const near = (y - base) / Math.max(1, LOGICAL_H - base)
+    const h = 3 + Math.floor(near * 5) + Math.floor(artNoise(i, 63) * 3)
+    rect(ctx, x, y, 1, h, tuftDark)
+    rect(ctx, x - 1, y + 2, 1, h - 2, tuftMid)
+    rect(ctx, x + 1, y + 1, 1, h - 1, artNoise(i, 64) > 0.45 ? tuftLit : tuftMid)
+    px(ctx, x, y - 1, tuftLit)
   }
 
   // One wash pushes the whole valley behind the lettering without dimming it to mud.
@@ -136,15 +172,20 @@ export function createTitleScene(): Scene {
       ctx.tick(dt, frame)
       const g = ctx.g
       if (input.anyPressed()) unlockAudio()
-      ctx.toastY = LOGICAL_H - 6
+      ctx.toastY = LOGICAL_H - 12
 
       valley(g)
 
-      bigText(g, 'SPROUT HOLLOW', LOGICAL_W / 2 + 3, 33, 3, withAlpha(PAL.ink, 0.55))
-      bigText(g, 'SPROUT HOLLOW', LOGICAL_W / 2, 30, 3, PAL.cream)
-      drawTextCentered(g, 'A QUIET FARM AT THE FOOT OF THE VALLEY', LOGICAL_W / 2, 60, PAL.parchment, {
-        shadow: PAL.ink,
-      })
+      bigText(g, 'SPROUT HOLLOW', LOGICAL_W / 2 + 6, 66, 3, withAlpha(PAL.ink, 0.55))
+      bigText(g, 'SPROUT HOLLOW', LOGICAL_W / 2, 60, 3, PAL.cream)
+      drawTextCentered(
+        g,
+        'A QUIET FARM AT THE FOOT OF THE VALLEY',
+        LOGICAL_W / 2,
+        120,
+        PAL.parchment,
+        { shadow: PAL.ink },
+      )
 
       ui.begin(g, input)
 
@@ -154,16 +195,22 @@ export function createTitleScene(): Scene {
         if (input.pressed('ArrowRight') || input.pressed('KeyD')) ui.focusNext(1)
         if (ui.focusedId() !== before) playSound('select')
 
-        const px0 = 44
-        const py0 = 92
-        const pw = LOGICAL_W - px0 * 2
-        woodPanel(g, px0, py0, pw, 74)
-        drawTextCentered(g, 'START A NEW FARM?', px0 + pw / 2, py0 + 12, PAL.ink)
-        drawTextCentered(g, 'THE FARM ALREADY IN THE VALLEY', px0 + pw / 2, py0 + 26, PAL.ink)
-        drawTextCentered(g, 'WILL BE LOST FOR GOOD.', px0 + pw / 2, py0 + 36, PAL.berry)
+        woodPanel(g, CONFIRM_X, CONFIRM_Y, CONFIRM_W, CONFIRM_H)
+        const mid = CONFIRM_X + CONFIRM_W / 2
+        drawTextCentered(g, 'START A NEW FARM?', mid, CONFIRM_Y + 22, PAL.ink)
+        drawTextCentered(g, 'THE FARM ALREADY IN THE VALLEY', mid, CONFIRM_Y + 48, PAL.ink)
+        drawTextCentered(g, 'WILL BE LOST FOR GOOD.', mid, CONFIRM_Y + 64, PAL.berry)
 
-        const keep = ui.button('title.keep', 'KEEP IT', px0 + 14, py0 + 50, 88, 15)
-        const wipe = ui.button('title.wipe', 'START OVER', px0 + pw - 102, py0 + 50, 88, 15)
+        const btnY = CONFIRM_Y + CONFIRM_H - CONFIRM_BTN_H - 20
+        const keep = ui.button('title.keep', 'KEEP IT', CONFIRM_X + 28, btnY, CONFIRM_BTN_W, CONFIRM_BTN_H)
+        const wipe = ui.button(
+          'title.wipe',
+          'START OVER',
+          CONFIRM_X + CONFIRM_W - CONFIRM_BTN_W - 28,
+          btnY,
+          CONFIRM_BTN_W,
+          CONFIRM_BTN_H,
+        )
         if (confirmOpened) {
           for (let i = 0; i < 2 && ui.focusedId() !== 'title.keep'; i++) ui.focusNext(-1)
           confirmOpened = false
@@ -217,11 +264,11 @@ export function createTitleScene(): Scene {
       ui.end()
 
       if (!ctx.hasSave) {
-        drawText(g, 'NO FARM SAVED YET', BUTTON_X + BUTTON_W + 8, BUTTON_Y + 5, PAL.parchment, {
+        drawText(g, 'NO FARM SAVED YET', BUTTON_X + BUTTON_W + 16, BUTTON_Y + 11, PAL.parchment, {
           shadow: PAL.ink,
         })
       }
-      drawTextCentered(g, 'ARROWS CHOOSE - ENTER PICKS', LOGICAL_W / 2, 198, PAL.parchment, {
+      drawTextCentered(g, 'ARROWS CHOOSE - ENTER PICKS', LOGICAL_W / 2, LOGICAL_H - 40, PAL.parchment, {
         shadow: PAL.ink,
       })
 

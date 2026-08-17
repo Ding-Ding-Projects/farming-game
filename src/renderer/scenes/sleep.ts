@@ -6,22 +6,25 @@ import { sleep } from '../../game/actions'
 import { formatDate } from '../../game/time'
 import { PAL, withAlpha } from '../../engine/palette'
 import { drawText, drawTextCentered, wrapText } from '../../engine/font'
-import { hline, rect } from '../../engine/pixel'
+import { hline, rect, woodPanel } from '../../engine/pixel'
 import { playSound } from '../../engine/audio'
 import { mixHex } from '../../art/tiles'
 
-const PANEL_X = 22
-const PANEL_Y = 10
+const PANEL_X = 44
+const PANEL_Y = 20
 const PANEL_W = LOGICAL_W - PANEL_X * 2
-const PANEL_H = 196
+const PANEL_H = 392
 
-const TEXT_X = PANEL_X + 12
-const TEXT_W = PANEL_W - 24
-const TEXT_Y = PANEL_Y + 22
-const LINE_H = 9
+const TEXT_X = PANEL_X + 24
+const TEXT_W = PANEL_W - 48
+const TEXT_Y = PANEL_Y + 48
+const LINE_H = 16
 /** Where the ruled page stops and the tin line begins. */
-const TEXT_BOTTOM = PANEL_Y + PANEL_H - 34
+const TEXT_BOTTOM = PANEL_Y + PANEL_H - 68
 const MAX_LINES = Math.floor((TEXT_BOTTOM - TEXT_Y) / LINE_H)
+
+const BUTTON_W = 192
+const BUTTON_H = 30
 
 const RULE = mixHex(PAL.parchment, PAL.soil, 0.2)
 const QUIET = mixHex(PAL.ink, PAL.parchment, 0.4)
@@ -202,7 +205,8 @@ function dawn(ctx: CanvasRenderingContext2D): void {
     const t = y / (LOGICAL_H - 1)
     rect(ctx, 0, y, LOGICAL_W, 1, mixHex(PAL.shadow, mixHex(PAL.dusk, PAL.lantern, 0.35), t * t))
   }
-  rect(ctx, 0, LOGICAL_H - 26, LOGICAL_W, 26, withAlpha(PAL.lantern, 0.12))
+  rect(ctx, 0, LOGICAL_H - 52, LOGICAL_W, 52, withAlpha(PAL.lantern, 0.12))
+  rect(ctx, 0, LOGICAL_H - 20, LOGICAL_W, 20, withAlpha(PAL.lantern, 0.1))
 }
 
 export function createSleepScene(): Scene {
@@ -238,36 +242,39 @@ export function createSleepScene(): Scene {
 
       dawn(g)
       ui.begin(g, input)
-      ui.panel(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, formatDate(ctx.state))
+
+      woodPanel(g, PANEL_X, PANEL_Y, PANEL_W, PANEL_H)
+      drawTextCentered(g, formatDate(ctx.state), PANEL_X + PANEL_W / 2, PANEL_Y + 16, PAL.ink)
+      hline(g, TEXT_X - 8, PANEL_Y + 34, TEXT_W + 16, PAL.bark)
 
       let y = TEXT_Y
       for (const line of lines) {
-        hline(g, TEXT_X - 4, y + 8, TEXT_W + 8, RULE)
-        if (line.text.length > 0) drawText(g, line.text, TEXT_X, y, line.color)
+        hline(g, TEXT_X - 8, y + 13, TEXT_W + 16, RULE)
+        if (line.text.length > 0) drawText(g, line.text, TEXT_X, y, line.color, { maxWidth: TEXT_W })
         y += LINE_H
       }
       // Rule the rest of the page so it reads as paper, not as a list that ran out.
-      for (; y < TEXT_BOTTOM; y += LINE_H) hline(g, TEXT_X - 4, y + 8, TEXT_W + 8, RULE)
+      for (; y < TEXT_BOTTOM; y += LINE_H) hline(g, TEXT_X - 8, y + 13, TEXT_W + 16, RULE)
 
       drawTextCentered(
         g,
         `${ctx.state.gold}G IN THE TIN`,
         PANEL_X + PANEL_W / 2,
-        PANEL_Y + PANEL_H - 30,
+        PANEL_Y + PANEL_H - 62,
         QUIET,
       )
 
       const go = ui.button(
         'sleep.continue',
         'CONTINUE',
-        PANEL_X + Math.floor((PANEL_W - 96) / 2),
-        PANEL_Y + PANEL_H - 20,
-        96,
-        15,
+        PANEL_X + Math.floor((PANEL_W - BUTTON_W) / 2),
+        PANEL_Y + PANEL_H - 42,
+        BUTTON_W,
+        BUTTON_H,
       )
       ui.end()
 
-      ctx.toastY = LOGICAL_H - 6
+      ctx.toastY = LOGICAL_H - 12
 
       if (resolvedThisFrame) {
         resolvedThisFrame = false

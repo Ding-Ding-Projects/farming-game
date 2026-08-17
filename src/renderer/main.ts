@@ -3,16 +3,17 @@
  *
  * Owns the four things no scene may own: the integer-scaled canvas, the frame loop
  * and its clocks, the scene stack, and the save file. Everything visible is drawn
- * into a 320x224 backing canvas and blitted onto the visible one at a whole-number
+ * into a 640x448 backing canvas and blitted onto the visible one at a whole-number
  * scale, with the leftover framed in ink.
  *
  * It no longer owns the document. `mount(container)` builds the canvas inside a
  * container the shell supplies and hands back a handle with `pause()`, `resume()`
  * and `dispose()`, so the Farm tab can stop burning frames the moment it is not the
- * visible tab. Nothing else moved: the whole-number scaling, the letterbox, the
- * `toLogical` mapping, the 6 fps sub-clock, the scene stack, the autosave, the audio
- * unlock, the `endFrame` discipline and the boot error panel are the same code they
- * were when the game shipped.
+ * visible tab. The framebuffer doubling of `docs/GRAPHICS.md` changed the numbers and
+ * nothing else: the whole-number scaling, the letterbox, the `toLogical` mapping, the
+ * 6 fps sub-clock, the scene stack, the autosave, the audio unlock, the `endFrame`
+ * discipline and the boot error panel are the same machinery they always were, and
+ * every size they work in comes from `game/constants.ts` rather than a literal here.
  *
  * This file knows nothing about the shell. Everything the shell wants to change —
  * translating a line, choosing a fixed pixel scale, turning autosave off — arrives as
@@ -46,13 +47,17 @@ const FRAME_MS = 1000 / 60
 const MAX_FRAME_MS = 100
 
 /**
- * The scale DESIGN.md section 2 asks for wherever the room exists. It is a floor, not
- * a promise: a container too small for it gets the largest whole number that *does*
- * fit, because a clipped farm is worse than a small one and the shell contract will
- * not have a surface that leaves the viewport. On any display at the 640x448 minimum
- * window this still resolves to 2 or better.
+ * The scale the farm starts at before the first `layout`, and the floor every scale
+ * computed after it is clamped to.
+ *
+ * `docs/GRAPHICS.md` section 1 moves the minimum from 2 to **1** along with the
+ * framebuffer: 640x448 at 1x already fills more of a window than 320x224 did at 2x,
+ * and 2x is 1280x896, which is the whole window rather than the tab inside it. A
+ * container too small for a bigger whole number gets this one, because a clipped farm
+ * is worse than a small one and the shell contract will not have a surface that leaves
+ * the viewport.
  */
-const PREFERRED_MIN_SCALE = 2
+const PREFERRED_MIN_SCALE = 1
 
 /** The whole-number scales a caller may pin the farm to. Anything else is `auto`. */
 const MAX_PINNED_SCALE = 6
@@ -66,7 +71,7 @@ export type GameMessageChannel = 'toast' | 'announce'
 /**
  * One game line, ready for two very different surfaces.
  *
- * `canvas` is drawn with the game's own 5x7 bitmap face, which carries ASCII and
+ * `canvas` is drawn with the game's own 7x9 bitmap face, which carries ASCII and
  * nothing else, so it must be renderable by that face. `text` is the full string for
  * the DOM — the live region, the caption strip and the history — where any script at
  * all is fine. A caller with nothing to translate returns the same string twice.
@@ -307,7 +312,7 @@ export function mount(container: HTMLElement, options: MountOptions = {}): GameH
     )
   }
 
-  /** Client pixels to the 320x224 grid, undoing the letterbox and the scale. */
+  /** Client pixels to the 640x448 grid, undoing the letterbox and the scale. */
   function toLogical(clientX: number, clientY: number): { x: number; y: number } {
     const box = canvas.getBoundingClientRect()
     const kx = box.width > 0 ? canvas.width / box.width : 1
@@ -328,20 +333,22 @@ export function mount(container: HTMLElement, options: MountOptions = {}): GameH
 
     rect(s.g, 0, 0, LOGICAL_W, LOGICAL_H, PAL.shadow)
 
-    const w = LOGICAL_W - 40
-    const x = 20
-    const lines = wrapText(message.length > 0 ? message : 'UNKNOWN ERROR', w - 20).slice(0, 8)
-    const h = 46 + lines.length * (FONT_H + 3)
-    const y = Math.max(8, Math.floor((LOGICAL_H - h) / 2))
+    // The old 16px-era panel, doubled with the framebuffer: a 6 px wood frame needs
+    // 20 px of margin inside it before a line of the 7x9 face starts.
+    const x = 40
+    const w = LOGICAL_W - x * 2
+    const lines = wrapText(message.length > 0 ? message : 'UNKNOWN ERROR', w - 40).slice(0, 8)
+    const h = 88 + lines.length * (FONT_H + 5)
+    const y = Math.max(16, Math.floor((LOGICAL_H - h) / 2))
 
     woodPanel(s.g, x, y, w, h)
-    drawTextCentered(s.g, 'SPROUT HOLLOW COULD NOT START', x + w / 2, y + 8, PAL.berry)
-    let ly = y + 24
+    drawTextCentered(s.g, 'SPROUT HOLLOW COULD NOT START', x + w / 2, y + 16, PAL.berry)
+    let ly = y + 44
     for (const line of lines) {
-      drawText(s.g, line, x + 10, ly, PAL.ink, { maxWidth: w - 20 })
-      ly += FONT_H + 3
+      drawText(s.g, line, x + 20, ly, PAL.ink, { maxWidth: w - 40 })
+      ly += FONT_H + 5
     }
-    drawTextCentered(s.g, 'RELOAD TO TRY AGAIN', x + w / 2, y + h - 13, PAL.bark)
+    drawTextCentered(s.g, 'RELOAD TO TRY AGAIN', x + w / 2, y + h - 26, PAL.bark)
 
     present(s)
   }
