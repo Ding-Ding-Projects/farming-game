@@ -42,7 +42,13 @@ jobs:
       # over the artifact unless told otherwise.
       - run: touch dist-site/.nojekyll
 
-      - uses: actions/configure-pages@v5
+      # actions/configure-pages is deliberately not used. It takes no inputs here and
+      # nothing references its outputs: Pages is already enabled on this repository, and
+      # the base path is set explicitly above as PAGES_BASE rather than discovered. All it
+      # contributed was a third action to download, and downloading it is what failed —
+      # codeload answered 429 three times in a row and took the whole deploy with it, on a
+      # build that was otherwise finished. One less thing to fetch is one less thing to
+      # rate-limit.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist-site
