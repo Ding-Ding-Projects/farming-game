@@ -207,32 +207,48 @@ because they are produced by the run that built the release. Reproduce it with
 
 ## Screenshots
 
+Every image below is a real frame, rendered from the committed source by `npm run shots`.
+Nothing here is a mock-up or a photograph of a window.
+
+| | |
+|---|---|
+| ![The farm at midday in spring](docs/shots/farm-spring-midday.png) | ![The same farm in the evening](docs/shots/farm-evening.png) |
+| **Spring, midday** | **Evening** |
+| ![Winter, with the ground under snow](docs/shots/farm-winter.png) | ![Rain falling on the farm](docs/shots/farm-rain.png) |
+| **Winter** | **Rain** |
+| ![Inside the coop, with the hens in their pens](docs/shots/inside-coop.png) | ![Inside the bakery, with its machines](docs/shots/inside-bakery.png) |
+| **Inside the coop** | **Inside the bakery** |
+| ![The shop, on the seed shelf](docs/shots/panel-shop-stock.png) | ![The order board](docs/shots/panel-orders.png) |
+| **The shop** | **The order board** |
+
+Regenerate them with:
+
 ```
 npm run shots
 ```
 
 <details>
-<summary><strong>The capture matrix — 33 frames, every destination the game has</strong></summary>
+<summary><strong>The capture matrix — all 33 frames, every destination the game has</strong></summary>
 
-Every frame below is produced by `npm run shots` at the committed source, and nothing in
-it is a mock-up. The world and interior frames drive the real art modules; the panel
-frames call the real `scene.update()` against a real save, so a panel that lays out wrongly
-produces a wrong picture and a panel that throws fails the test.
+Every frame is produced by `npm run shots` at the committed source, and nothing in it is a
+mock-up. The world and interior frames drive the real art modules; the panel frames call
+the real `scene.update()` against a real save, so a panel that lays out wrongly produces a
+wrong picture and a panel that throws fails the test. Each name below links to its image.
 
 | Surface | Frames |
 |---|---|
-| The farm, through the day | `farm-spring-midday`, `farm-evening`, `farm-night` |
-| Weather and seasons | `farm-rain`, `farm-winter`, `farm-fall-orchard` |
-| Livestock and production | `farm-coop-and-animals`, `farm-machines-working` |
-| Placing a building | `farm-placement-ghost` |
-| Inside a building | `inside-coop`, `inside-barn`, `inside-farmhouse`, `inside-bakery`, `inside-stall`, `inside-mine`, `inside-greenhouse`, `inside-silo` |
-| First screen | `panel-title` |
-| The shop, one per shelf | `panel-shop-stock`, `panel-shop-buildings`, `panel-shop-machines`, `panel-shop-animals`, `panel-shop-land` |
-| The bag | `panel-bag`, `panel-bag-empty` |
-| The order board and the bank | `panel-orders`, `panel-bank`, `panel-orders-empty` |
-| Factory and stall | `panel-machine`, `panel-stall` |
-| A building's occupants | `panel-building-list`, `panel-inside-barn` |
-| Controls | `panel-help` |
+| The farm, through the day | [farm-spring-midday](docs/shots/farm-spring-midday.png), [farm-evening](docs/shots/farm-evening.png), [farm-night](docs/shots/farm-night.png) |
+| Weather and seasons | [farm-rain](docs/shots/farm-rain.png), [farm-winter](docs/shots/farm-winter.png), [farm-fall-orchard](docs/shots/farm-fall-orchard.png) |
+| Livestock and production | [farm-coop-and-animals](docs/shots/farm-coop-and-animals.png), [farm-machines-working](docs/shots/farm-machines-working.png) |
+| Placing a building | [farm-placement-ghost](docs/shots/farm-placement-ghost.png) |
+| Inside a building | [inside-coop](docs/shots/inside-coop.png), [inside-barn](docs/shots/inside-barn.png), [inside-farmhouse](docs/shots/inside-farmhouse.png), [inside-bakery](docs/shots/inside-bakery.png), [inside-stall](docs/shots/inside-stall.png), [inside-mine](docs/shots/inside-mine.png), [inside-greenhouse](docs/shots/inside-greenhouse.png), [inside-silo](docs/shots/inside-silo.png) |
+| First screen | [panel-title](docs/shots/panel-title.png) |
+| The shop, one per shelf | [panel-shop-stock](docs/shots/panel-shop-stock.png), [panel-shop-buildings](docs/shots/panel-shop-buildings.png), [panel-shop-machines](docs/shots/panel-shop-machines.png), [panel-shop-animals](docs/shots/panel-shop-animals.png), [panel-shop-land](docs/shots/panel-shop-land.png) |
+| The bag | [panel-bag](docs/shots/panel-bag.png), [panel-bag-empty](docs/shots/panel-bag-empty.png) |
+| The order board and the bank | [panel-orders](docs/shots/panel-orders.png), [panel-bank](docs/shots/panel-bank.png), [panel-orders-empty](docs/shots/panel-orders-empty.png) |
+| Factory and stall | [panel-machine](docs/shots/panel-machine.png), [panel-stall](docs/shots/panel-stall.png) |
+| A building's occupants | [panel-building-list](docs/shots/panel-building-list.png), [panel-inside-barn](docs/shots/panel-inside-barn.png) |
+| Controls | [panel-help](docs/shots/panel-help.png) |
 
 Empty states are captured deliberately: `panel-bag-empty` and `panel-orders-empty` are the
 two places a new player lands first, and they are the easiest screens to leave broken.

@@ -32,8 +32,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
         env:
-          # This job never launches Electron, only type-checks against it.
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          # Windows also starts the application (see the smoke step), so it needs the
+          # real binary. Ubuntu only type-checks against Electron.
+          ELECTRON_SKIP_BINARY_DOWNLOAD: ${{ matrix.os == 'windows-latest' && '0' || '1' }}
 
       - name: Validate the electron-builder configuration
         run: npm run check:build
@@ -58,6 +59,15 @@ jobs:
 
       - name: Build the website
         run: npm run build:site
+
+      # Everything above this line passed while the application was completely broken:
+      # it installed, launched, ran four processes and never showed a window, through
+      # four releases. Type-checking and unit tests examine modules; this starts the
+      # program. Windows only — it is the platform this ships for, and the capture path
+      # needs a real desktop rather than a GPU-less virtual display.
+      - name: Start the application and require it to render
+        if: matrix.os == 'windows-latest'
+        run: npm run smoke
 
   screenshots:
     name: Render screenshots

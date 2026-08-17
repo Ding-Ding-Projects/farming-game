@@ -669,6 +669,16 @@ export function applyPersistedSettings(): void {
     // i18n keeps its own defaults; the rows still show what the store holds.
   }
   subscribe(() => {
+    // `sampleIn` switches the language, reads one string and switches back, and
+    // `setLang` writes through to the store — so without this guard drawing a sample
+    // re-enters here, re-syncs the panel, redraws the sample and switches the language
+    // again, forever. It is a synchronous cycle, so nothing else on the main thread
+    // ever runs again: no timers, no animation frames, not even the load event. The
+    // application opened to a window that never appeared.
+    //
+    // The language-change handler further down already skipped sampling for exactly
+    // this reason. The store is the second way in, and it was not guarded.
+    if (sampling) return
     const now = settings()
     applyRootTokens({
       scale: now.displayScale,

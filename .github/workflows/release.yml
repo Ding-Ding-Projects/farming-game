@@ -43,6 +43,14 @@ jobs:
           npm run typecheck
           npm test
 
+      # Nothing above this line ever starts the program, which is how a build that
+      # launched to a window that never appeared was released four times over. The
+      # application has to render before it is allowed to be packaged.
+      - name: Start the application and require it to render
+        run: |
+          npm run build
+          npm run smoke
+
       - name: Resolve the version and tag
         id: v
         shell: pwsh
