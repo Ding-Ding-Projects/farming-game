@@ -1,16 +1,23 @@
-/** Fixed low-resolution framebuffer. Everything is drawn here, then upscaled by a whole number. */
-export const LOGICAL_W = 320
-export const LOGICAL_H = 224
+/**
+ * Fixed low-resolution framebuffer. Everything is drawn here, then upscaled by a
+ * whole number.
+ *
+ * Exactly 2x the original 320x224, which is why the farm grid, the band layout and
+ * the 1280x896 window are all unchanged by the move to 32px tiles: every constant
+ * below simply doubled. See docs/GRAPHICS.md.
+ */
+export const LOGICAL_W = 640
+export const LOGICAL_H = 448
 
 /** Every tile and character sprite is this many pixels square. */
-export const TILE = 16
+export const TILE = 32
 
 /** Playable farm grid, row-major. */
 export const FARM_W = 20
 export const FARM_H = 11
 
 /** Vertical band layout of the logical framebuffer. */
-export const HUD_H = 24
+export const HUD_H = 48
 export const WORLD_Y = HUD_H
 export const WORLD_H = FARM_H * TILE
 export const BELT_Y = WORLD_Y + WORLD_H
