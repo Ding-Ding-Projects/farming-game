@@ -68,8 +68,20 @@ jobs:
         id: collect
         shell: pwsh
         run: |
-          $src = "dist/squirrel-windows"
-          if (-not (Test-Path $src)) { throw "no $src directory - Squirrel packaging did not run" }
+          # electron-builder writes Squirrel output to <directories.output>/squirrel-windows.
+          # This project sets that to "release", not the default "dist", so read it from the
+          # manifest rather than hardcoding a path that is right for somebody else's repo.
+          $outDir = (Get-Content package.json -Raw | ConvertFrom-Json).build.directories.output
+          if (-not $outDir) { $outDir = "dist" }
+          $src = Join-Path $outDir "squirrel-windows"
+
+          if (-not (Test-Path $src)) {
+            "Expected $src. What electron-builder actually produced:"
+            Get-ChildItem $outDir -Recurse -File -ErrorAction SilentlyContinue |
+              ForEach-Object { "  " + $_.FullName.Replace((Get-Location).Path + [IO.Path]::DirectorySeparatorChar, "") }
+            throw "no $src directory - Squirrel packaging did not produce its output where expected"
+          }
+
           New-Item -ItemType Directory -Force staging | Out-Null
           Copy-Item "$src/*" staging -Recurse -Force
 
