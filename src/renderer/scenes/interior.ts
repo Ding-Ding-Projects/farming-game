@@ -38,6 +38,7 @@ import { drawRoom, roomOrigin } from '../../art/interiors'
 import { createBuildingScene } from './building'
 import { createInventoryScene } from './inventory'
 import { createMachineScene } from './machine'
+import { createOrdersScene } from './orders'
 import { createShopScene } from './shop'
 import { createStallScene } from './stall'
 import { createSleepScene } from './sleep'
@@ -348,8 +349,6 @@ function honour(panel: PanelRequest | null): SceneCommand | null {
       // stall and pricing one thing is one move rather than two.
       return { kind: 'push', scene: createStallScene(Number(panel.ref)) }
     case 'orders':
-      // The order board is not built yet. The ledger has already read out how many orders
-      // are standing, so this is a readout waiting on a panel and not a dead end.
-      return null
+      return { kind: 'push', scene: createOrdersScene() }
   }
 }

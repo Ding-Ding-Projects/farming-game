@@ -50,6 +50,7 @@ import { formatMaterials, missingMaterials, xpProgress } from '../../game/progre
 import { canPlace, placeBuilding, placementMessage } from '../../game/placement'
 import { machineAt, machineDefFor, machineLevel, placeMachine } from '../../game/production'
 import { buildingDoorAt, doorOf } from '../../game/interiors'
+import { canGraze } from '../../game/livestock'
 import { PAL, withAlpha } from '../../engine/palette'
 import { drawText, textWidth } from '../../engine/font'
 import { dither, ellipse, hline, outline, px, rect, vline, woodPanel } from '../../engine/pixel'
@@ -482,6 +483,14 @@ function facedLabel(state: GameState): string {
   if (door !== null) {
     const def = buildingDef(door.kind)
     return `${def === undefined ? door.kind.toUpperCase() : def.name} DOOR - USE TO GO IN`
+  }
+
+  // Holding the axe over standing sward is the only route to hay in the game, and a
+  // player who never tries the axe on grass would never find it. So the line says so at
+  // the moment it is true, rather than leaving it to the help page.
+  const grass = state.tiles[index]
+  if (state.tool === 'axe' && grass !== undefined && grass.ground === 'grass') {
+    return canGraze(state.season) ? 'GRASS - CUT IT FOR HAY' : 'GRASS - UNDER SNOW, NO HAY NOW'
   }
 
   const tile = state.tiles[index]

@@ -37,7 +37,7 @@ import { cropById, isRipe } from './crops'
 import { randInt, rngFor } from './rng'
 import { nextSeason } from './time'
 import { absoluteDay, dailyRecovery, eventBeginsToday, recordPrices, refreshEvent } from './economy'
-import { nightlyLivestock } from './livestock'
+import { cutGrass, nightlyLivestock } from './livestock'
 import { accrueInterest, expireOrders, nightlyStall, offerOrders, seasonalTax, totalDebt } from './market'
 import { clearingSource, rollMaterials } from './materials'
 import { nightlyProduction } from './production'
@@ -506,7 +506,18 @@ export function useTool(state: GameState): ActionResult {
     case 'hand':
       return harvest(state, index)
     case 'axe':
-      return clearDebris(state, index)
+      // The axe is the cutting tool, not only the clearing one. Swung at rock, timber or
+      // weeds it clears them; swung at standing sward it scythes hay into the silo, which
+      // is the *only* way hay is ever made. Without this, a silo can never fill, animals
+      // cannot be fed through a winter that lets nothing graze, and `cutGrass` is a verb
+      // with a full set of refusals that nothing in the game can reach.
+      //
+      // Deciding which of the two the player meant belongs here, in the one place that
+      // already turns a held tool into a verb, rather than in a second tool slot the belt
+      // and the save format would both have to grow to hold.
+      return state.tiles[index]?.ground === 'grass'
+        ? cutGrass(state, index)
+        : clearDebris(state, index)
     case 'sprinkler':
       return placeSprinkler(state, index)
     case 'fertilizer':

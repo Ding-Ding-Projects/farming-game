@@ -24,9 +24,32 @@ import { buy, sell, sellAllProduce, sellValue, shopStock } from '../../game/shop
 import { BUILDINGS, buildingDef } from '../../game/buildings'
 import { MACHINES } from '../../game/factories'
 import { machineLevel } from '../../game/production'
-import { formatMaterials } from '../../game/progression'
 import { SPECIES } from '../../game/species'
 import { ageInDays, animalsIn, buyAnimal, housesSpecies } from '../../game/livestock'
+import { REGIONS, isFreeRegion, regionTileCount } from '../../game/regions'
+import {
+  buyRegion,
+  expandStore,
+  formatMaterials,
+  isUnlocked,
+  lockedNote,
+  missingMaterials,
+  ownsRegion,
+} from '../../game/progression'
+import {
+  expansionCost,
+  expansionTier,
+  expansionUnlockId,
+  expansionsLeft,
+  materialCount,
+  storeCapAtTier,
+  storeName,
+  storeSpace,
+} from '../../game/storage'
+import type { StoreId } from '../../game/farm-types'
+
+/** The two stores whose caps can be paid up. `StoreId` has exactly these members. */
+const STORES: readonly StoreId[] = ['silo', 'barn']
 import { cropById } from '../../game/crops'
 import { productById } from '../../game/products'
 import { treeById } from '../../game/trees'
@@ -38,7 +61,7 @@ import { playSound } from '../../engine/audio'
 import { mixHex } from '../../art/tiles'
 import { drawProduceIcon, drawSeedIcon } from '../../art/plants'
 import { drawGoodIcon } from '../../art/actors'
-import { drawMaterialIcon, drawProductIcon } from '../../art/goods'
+import { drawMaterialIcon, drawPlotIcon, drawProductIcon, drawShelfIcon } from '../../art/goods'
 import { drawMachineIcon } from '../../art/structures'
 import { drawAnimalIcon } from '../../art/livestock'
 
@@ -115,7 +138,7 @@ const QUIET = mixHex(PAL.ink, PAL.parchment, 0.4)
 const STRIPE = mixHex(PAL.parchment, PAL.soil, 0.1)
 const CELL_EDGE = mixHex(PAL.parchment, PAL.ink, 0.3)
 
-const TABS = ['STOCK', 'BUILDINGS', 'MACHINES', 'ANIMALS'] as const
+const TABS = ['STOCK', 'BUILDINGS', 'MACHINES', 'ANIMALS', 'LAND'] as const
 type TabIndex = 0 | 1 | 2 | 3
 
 /* ------------------------------------------------------------------ widgets */
@@ -466,6 +489,118 @@ function animalRows(
   })
 }
 
+/**
+ * The land shelf: the plots of the valley that are still the town's, and the two stores
+ * whose caps can be paid up.
+ *
+ * `buyRegion` and `expandStore` both had complete rules and neither had a way in, which
+ * meant two thirds of the farm could never be bought and a full barn could never be made
+ * bigger. A plot the player cannot afford yet is listed greyed with the exact reason —
+ * level, gold or deeds — rather than hidden, because knowing what to save for is the
+ * whole of the mid game.
+ */
+function landRows(ctx: SceneContext, take: (result: ActionResult) => void): Row[] {
+  const state = ctx.state
+  const rows: Row[] = []
+
+  for (const region of REGIONS) {
+    if (isFreeRegion(region)) continue
+    const owned = ownsRegion(state, region.id)
+    const deedsHeld = materialCount(state, 'deed')
+    const tiles = regionTileCount(region)
+
+    const reason = owned
+      ? 'ALREADY YOURS'
+      : state.progression.level < region.level
+        ? `NEEDS LEVEL ${region.level}`
+        : state.gold < region.cost
+          ? `NEEDS ${region.cost}G`
+          : deedsHeld < region.deeds
+            ? `NEEDS ${region.deeds} DEEDS, YOU HAVE ${deedsHeld}`
+            : ''
+
+    rows.push({
+      title: region.name.toUpperCase(),
+      note: owned
+        ? `${tiles} TILES, ALREADY CLEARED FOR WORK`
+        : reason === ''
+          ? `${tiles} TILES AND ${region.deeds} DEEDS`
+          : `${tiles} TILES - ${reason}`,
+      price: owned ? 'OWNED' : `${region.cost}G`,
+      priceWarn: !owned && state.gold < region.cost,
+      held: owned ? '' : `${deedsHeld}/${region.deeds} DEEDS`,
+      locked: owned || reason !== '',
+      icon: (g, x, y) => {
+        drawPlotIcon(g, x, y, owned)
+      },
+      actions: [
+        {
+          label: owned ? 'OWNED' : 'BUY',
+          x: RIGHT_X,
+          w: RIGHT_W,
+          disabled: owned || reason !== '',
+          run: () => {
+            take(buyRegion(state, region.id))
+            return null
+          },
+        },
+      ],
+      spoken: `${region.name}, ${tiles} tiles, ${region.cost} gold. ${reason === '' ? 'AVAILABLE.' : reason}`,
+    })
+  }
+
+  for (const store of STORES) {
+    const { used, cap } = storeSpace(state, store)
+    const left = expansionsLeft(state, store)
+    const cost = expansionCost(state, store)
+    const next = storeCapAtTier(store, expansionTier(state, store) + 1)
+    const maxed = cost === null || left <= 0
+    const short = cost === null ? {} : missingMaterials(state, cost.materials)
+    const reason = maxed
+      ? 'BUILT AS BIG AS IT GOES'
+      : !isUnlocked(state, expansionUnlockId(store))
+        ? lockedNote(expansionUnlockId(store)).toUpperCase()
+        : cost !== null && state.gold < cost.gold
+          ? `NEEDS ${cost.gold}G`
+          : Object.keys(short).length > 0
+            ? `SHORT ${formatMaterials(short)}`
+            : ''
+
+    rows.push({
+      title: `${storeName(store)} SHELVES`,
+      note: maxed
+        ? `HOLDING ${used} OF ${cap} - ${reason}`
+        : reason === ''
+          ? `HOLDING ${used} OF ${cap}, PAY UP TO ${next}`
+          : `HOLDING ${used} OF ${cap} - ${reason}`,
+      price: maxed || cost === null ? 'DONE' : `${cost.gold}G`,
+      priceWarn: !maxed && cost !== null && state.gold < cost.gold,
+      held: maxed || cost === null ? '' : formatMaterials(cost.materials),
+      locked: maxed || reason !== '',
+      icon: (g, x, y) => {
+        drawShelfIcon(g, x, y, cap === 0 ? 0 : used / cap)
+      },
+      actions: [
+        {
+          label: maxed ? 'FULL SIZE' : 'EXPAND',
+          x: RIGHT_X,
+          w: RIGHT_W,
+          disabled: maxed || reason !== '',
+          run: () => {
+            take(expandStore(state, store))
+            return null
+          },
+        },
+      ],
+      spoken: `${storeName(store)} shelves, holding ${used} of ${cap}. ${
+        reason === '' && cost !== null ? `${cost.gold} gold to expand.` : reason
+      }`,
+    })
+  }
+
+  return rows
+}
+
 function stockRows(ctx: SceneContext, take: (result: ActionResult) => void): Row[] {
   const state = ctx.state
   return shopStock(state).map((entry): Row => {
@@ -583,7 +718,9 @@ export function createShopScene(): Scene {
             ? buildingRows(ctx)
             : tab === 2
               ? machineRows(ctx)
-              : animalRows(ctx, take, selectedHome)
+              : tab === 3
+                ? animalRows(ctx, take, selectedHome)
+                : landRows(ctx, take)
 
       // The footer is the last row of the list. Built before the cursor is clamped so
       // its width is known to the column cursor.
