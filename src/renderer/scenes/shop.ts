@@ -79,6 +79,13 @@ export interface BuildRequest {
   kind: string
   /** True for a one-tile machine, false for a building with a real footprint. */
   machine: boolean
+  /**
+   * Set when the player is relocating a building that already stands, rather than raising
+   * a new one. The ghost and the refusals are identical either way — the only difference
+   * is which verb the confirmation runs, and that a move has to ignore the mover's own
+   * tiles when it asks whether the ground is free.
+   */
+  moveId?: string
 }
 
 let armed: BuildRequest | null = null
@@ -88,6 +95,15 @@ export function takeBuildRequest(): BuildRequest | null {
   const request = armed
   armed = null
   return request
+}
+
+/**
+ * Arms the world's placing mode to relocate a standing building. Lives here beside the
+ * build request because it is the same channel and the same ghost; a second one would
+ * be a second thing to keep in step.
+ */
+export function armBuildingMove(id: string, kind: string): void {
+  armed = { kind, machine: false, moveId: id }
 }
 
 /* ------------------------------------------------------------------ layout */

@@ -30,6 +30,7 @@ import {
 import { animalsIn, isProduceReady } from '../../game/livestock'
 import { speciesById } from '../../game/species'
 import { machineStatus } from '../../game/production'
+import { demolishBuilding, demolishPlan } from '../../game/placement'
 import { PAL, withAlpha } from '../../engine/palette'
 import { FONT_H, drawText, textWidth } from '../../engine/font'
 import { hline, rect, vline, woodPanel } from '../../engine/pixel'
@@ -39,12 +40,15 @@ import { createBuildingScene } from './building'
 import { createInventoryScene } from './inventory'
 import { createMachineScene } from './machine'
 import { createOrdersScene } from './orders'
-import { createShopScene } from './shop'
+import { armBuildingMove, createShopScene } from './shop'
 import { createStallScene } from './stall'
 import { createSleepScene } from './sleep'
 
 /** The same walk speed as the farm, so stepping through a door changes nothing about it. */
 const MOVE_MS = 180
+
+/** How long a pull-down stays armed after the plan is read out. */
+const DEMOLISH_CONFIRM_MS = 4000
 
 const BAND_H = FARM_H * TILE
 
@@ -153,8 +157,10 @@ function drawRoomHud(ctx: SceneContext, interior: Interior, ahead: string): void
   drawText(g, `AHEAD: ${ahead}`, 14, INFO_Y + 5, PAL.ink, { maxWidth: LOGICAL_W - 150 })
   const out = 'ESC TO LEAVE'
   drawText(g, out, LOGICAL_W - 18 - textWidth(out), INFO_Y + 5, PAL.ink)
-  const hint = s.capacity > 0 ? 'SPACE TO USE   L FOR THE LIST' : 'SPACE TO USE'
-  drawText(g, hint, 14, INFO_Y + 5 + FONT_H + 3, withAlpha(PAL.ink, 0.7))
+  const parts2 = ['SPACE TO USE']
+  if (s.capacity > 0) parts2.push('L FOR THE LIST')
+  parts2.push('M MOVE', 'X PULL DOWN')
+  drawText(g, parts2.join('   '), 14, INFO_Y + 5 + FONT_H + 3, withAlpha(PAL.ink, 0.7))
 }
 
 /* ------------------------------------------------------------------- scene */
@@ -176,6 +182,12 @@ export function createInteriorScene(buildingId: string): Scene {
   let drawY = 0
   let moveT = MOVE_MS
   let spoken = ''
+  /**
+   * Milliseconds left on the pull-down confirmation. Tearing a building down sells its
+   * occupants and returns nothing, so the first press only ever states the plan and the
+   * second press inside this window is what actually does it.
+   */
+  let demolishArmed = 0
 
   return {
     id: 'building',
@@ -272,6 +284,39 @@ export function createInteriorScene(buildingId: string): Scene {
       if (input.pressed('KeyL') && summarise(ctx.state, interior).capacity > 0) {
         playSound('select')
         command = { kind: 'push', scene: createBuildingScene(interior.buildingId) }
+      }
+
+      /* ---- managing the building you are standing in -------------------- */
+      demolishArmed = Math.max(0, demolishArmed - dt)
+
+      if (input.pressed('KeyM')) {
+        // Moving needs a tile to move to, which only exists outside, so this arms the
+        // farm's own placing mode and walks the player back out to use it.
+        armBuildingMove(interior.buildingId, interior.kind)
+        playSound('select')
+        ctx.say(`PICK A NEW PLACE FOR THE ${interior.name}.`, 'good')
+        command = { kind: 'pop' }
+      }
+
+      if (input.pressed('KeyX')) {
+        const plan = demolishPlan(ctx.state, interior.buildingId)
+        if (!plan.ok) {
+          playSound('deny')
+          ctx.say(plan.message, 'bad')
+          demolishArmed = 0
+        } else if (demolishArmed > 0) {
+          const result = demolishBuilding(ctx.state, interior.buildingId)
+          ctx.state = result.state
+          playSound(result.sound)
+          ctx.say(result.message, result.ok ? 'good' : 'bad')
+          demolishArmed = 0
+          if (result.ok) command = { kind: 'pop' }
+        } else {
+          // The plan states what will happen to every occupant before a coin moves.
+          demolishArmed = DEMOLISH_CONFIRM_MS
+          playSound('deny')
+          ctx.say(`${plan.message} PRESS X AGAIN TO DO IT.`, 'bad')
+        }
       }
 
       if (input.pressed('Escape')) command = { kind: 'pop' }
