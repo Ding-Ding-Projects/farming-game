@@ -186,6 +186,15 @@ jobs:
 
           if ($exists) {
             "Release $tag exists - updating it in place."
+
+            # The notes say "built from <sha>", so the tag has to agree. Without this
+            # the tag stays pinned to whichever commit first published this version
+            # while the artifacts and the notes move on, and the two quietly disagree
+            # about what was actually released.
+            gh api -X PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" `
+              -f sha="$env:GITHUB_SHA" -F force=true | Out-Null
+            "Moved tag $tag to $env:GITHUB_SHA"
+
             gh release edit $tag --notes-file release-notes.md --title "Sprout Hollow $tag" --draft=false --latest
             gh release upload $tag (Get-ChildItem staging -File | ForEach-Object { $_.FullName }) --clobber
           } else {
@@ -199,8 +208,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $json = gh release view "${{ steps.v.outputs.tag }}" --json isDraft,assets | ConvertFrom-Json
+          $tag = "${{ steps.v.outputs.tag }}"
+          $json = gh release view $tag --json isDraft,assets,tagName | ConvertFrom-Json
           if ($json.isDraft) { throw "the release is still a draft" }
+
+          # The notes claim this release was built from GITHUB_SHA; prove the tag agrees.
+          $tagged = gh api "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" --jq .object.sha
+          if ($tagged -ne $env:GITHUB_SHA) {
+            throw "tag $tag points at $tagged but this release was built from $env:GITHUB_SHA"
+          }
+          "Tag $tag correctly points at $tagged"
           $names = $json.assets.name
           "Published assets: $($names -join ', ')"
           foreach ($required in @('.exe', '.nupkg', 'RELEASES')) {
