@@ -33,6 +33,11 @@ jobs:
 
       - run: npm ci
 
+      # First, and cheap: a bad packaging key would otherwise only surface after a
+      # full typecheck, test run and renderer build.
+      - name: Validate the electron-builder configuration
+        run: npm run check:build
+
       - name: Typecheck and test
         run: |
           npm run typecheck

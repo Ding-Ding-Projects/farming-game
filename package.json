@@ -16,7 +16,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "package": "npm run build && electron-builder --win squirrel --publish never",
-    "count": "node scripts/count-lines.mjs"
+    "count": "node scripts/count-lines.mjs",
+    "check:build": "node scripts/check-build-config.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
@@ -43,7 +44,7 @@
         "squirrel"
       ],
       "signAndEditExecutable": false,
-      "signDlls": false,
+      "signExecutable": false,
       "verifyUpdateCodeSignature": false
     },
     "squirrelWindows": {

@@ -35,6 +35,9 @@ jobs:
           # This job never launches Electron, only type-checks against it.
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
+      - name: Validate the electron-builder configuration
+        run: npm run check:build
+
       - name: Typecheck
         run: npm run typecheck
 
