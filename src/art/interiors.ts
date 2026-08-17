@@ -45,7 +45,7 @@ const TILE_COLD = mixHex(PAL.sky, PAL.cream, 0.55)
 const WATER = mixHex(PAL.sky, PAL.leaf, 0.4)
 
 /** The dark beyond the room. A room is an island in the band, not a full-bleed fill. */
-export const VOID = mixHex(PAL.ink, PAL.shadow, 0.35)
+const VOID = mixHex(PAL.ink, PAL.shadow, 0.35)
 
 const FLOOR_BASE: Record<FloorId, string> = {
   plank: PLANK,
@@ -80,7 +80,7 @@ function grain(x: number, y: number, salt: number): number {
  * One floor tile. `x` and `y` are pixels, not cells — the caller has already placed the
  * room in the band, so this never needs to know where the room is.
  */
-export function drawFloorTile(ctx: Ctx, floor: FloorId, x: number, y: number, cx: number, cy: number): void {
+function drawFloorTile(ctx: Ctx, floor: FloorId, x: number, y: number, cx: number, cy: number): void {
   const base = FLOOR_BASE[floor]
   const r = ramp(base)
   rect(ctx, x, y, TILE, TILE, r.mid)
@@ -218,13 +218,13 @@ export function drawFloorTile(ctx: Ctx, floor: FloorId, x: number, y: number, cx
 
 /* ---------------------------------------------------------------------- walls */
 
-export type WallEdge = 'back' | 'left' | 'right' | 'front' | 'corner'
+type WallEdge = 'back' | 'left' | 'right' | 'front' | 'corner'
 
 /**
  * One wall tile. The back wall is the tall one and carries the room's character; the side
  * walls are read as thickness and are lit on the left, shadowed on the right.
  */
-export function drawWallTile(
+function drawWallTile(
   ctx: Ctx,
   wall: WallId,
   edge: WallEdge,
@@ -332,7 +332,7 @@ export function drawWallTile(
 }
 
 /** The gap in the front wall, drawn as a lit threshold with the outside showing through. */
-export function drawDoorway(ctx: Ctx, wall: WallId, x: number, y: number): void {
+function drawDoorway(ctx: Ctx, wall: WallId, x: number, y: number): void {
   const r = ramp(WALL_BASE[wall])
   rect(ctx, x, y, TILE, TILE, VOID)
   // The jambs, and the daylight falling in across the threshold.
@@ -368,7 +368,7 @@ const IDLE: StationState = { occupied: false, ready: false, wanting: false }
  * One station, drawn into the tile at `x,y`. Furniture wider than a tile is drawn once,
  * from its top-left, across its whole size — the caller does not tile it.
  */
-export function drawStation(
+function drawStation(
   ctx: Ctx,
   station: Station,
   x: number,
@@ -772,7 +772,7 @@ export function roomOrigin(interior: Interior): { x: number; y: number } {
 }
 
 /** The farmer, as the room needs to know them. Null draws an empty room. */
-export interface RoomOccupant {
+interface RoomOccupant {
   /** Room coordinates, fractional while a step is tweening. */
   x: number
   y: number
@@ -866,7 +866,7 @@ export function drawRoom(
  * The one lamp a room hangs from its back wall, over the door. It is the only light
  * source inside, which is why the corners of a big room are allowed to go dark.
  */
-export function drawLamp(ctx: Ctx, x: number, y: number, frame: number): void {
+function drawLamp(ctx: Ctx, x: number, y: number, frame: number): void {
   const iron = ramp(IRON)
   const swing = prefersReducedMotion() ? 0 : ((beatOf(frame) >> 1) & 3) === 1 ? 1 : 0
   const cx = x + 16 + swing
@@ -894,7 +894,7 @@ export function drawLamp(ctx: Ctx, x: number, y: number, frame: number): void {
  * A soft pool of lamplight on the floor beneath it. Dithered, never blurred — the game
  * has no gradients, so falloff is two rings of dither at different densities.
  */
-export function drawLampPool(ctx: Ctx, cx: number, cy: number, radius: number): void {
+function drawLampPool(ctx: Ctx, cx: number, cy: number, radius: number): void {
   const ry = Math.max(4, radius >> 1)
   const inner = withAlpha(PAL.lantern, 0.13)
   const outer = withAlpha(PAL.lantern, 0.1)

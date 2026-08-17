@@ -23,11 +23,7 @@ import { beatOf, mixHex, prefersReducedMotion } from './tiles'
 type Ctx = CanvasRenderingContext2D
 
 /** The farmer occupies exactly one tile and never draws outside it. */
-export const FARMER_SIZE = 32
-/** Belt icons. `docs/GRAPHICS.md` section 3: the belt band is 56 px, an icon is 24. */
-export const TOOL_ICON_SIZE = 24
-/** Loose stock in the shop and the inventory, on a contact shadow. */
-export const GOOD_ICON_SIZE = 24
+const FARMER_SIZE = 32
 
 /* ------------------------------------------------------------------ *
  * Ramps. Every colour in this module comes from one of these.
@@ -971,7 +967,7 @@ function drawHeldTool(
  * ------------------------------------------------------------------ */
 
 /** What the farmer is doing. `walk` and `use` are state, so they survive reduced motion. */
-export type FarmerAction = 'idle' | 'walk' | 'use'
+type FarmerAction = 'idle' | 'walk' | 'use'
 
 export interface FarmerPose {
   action: FarmerAction

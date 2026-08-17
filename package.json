@@ -21,7 +21,8 @@
     "check:build": "node scripts/check-build-config.mjs",
     "dish": "node scripts/dish-name.mjs",
     "icon": "node scripts/make-icon.mjs",
-    "check:icon": "node scripts/check-icon.mjs"
+    "check:icon": "node scripts/check-icon.mjs",
+    "check:exports": "node scripts/dead-exports.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

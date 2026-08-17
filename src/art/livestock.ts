@@ -41,7 +41,7 @@ import { beatOf, mixHex, prefersReducedMotion } from './tiles'
 type Ctx = CanvasRenderingContext2D
 
 /** Animal and machine icons are a full tile, so a shop row shows the real sprite. */
-export const ANIMAL_ICON = TILE
+const ANIMAL_ICON = TILE
 
 /* ------------------------------------------------------------------ *
  * Coats
@@ -96,11 +96,6 @@ const GENERIC_UNWELL: Build = { ...GENERIC, coat: mixHex(GENERIC.coat, PAL.dusk,
 function buildOf(id: SpeciesId, unwell = false): Build {
   if (unwell) return BUILDS_UNWELL[id] ?? GENERIC_UNWELL
   return BUILDS[id] ?? GENERIC
-}
-
-/** Design-space width. A caller laying out a pen needs to know who overhangs. */
-export function animalWidth(species: SpeciesDef): number {
-  return buildOf(species.id).w
 }
 
 /* ------------------------------------------------------------------ *
@@ -935,8 +930,9 @@ function penFor(
 
 /**
  * One animal, centred on the tile at `sx, sy` and standing three pixels off its bottom
- * edge. The large species overhang their tile horizontally — see `animalWidth` — so a
- * caller drawing a full pen should draw the ground of every tile before any animal.
+ * edge. The large species overhang their tile horizontally — their `Build.w` is wider
+ * than a tile — so a caller drawing a full pen should draw the ground of every tile
+ * before any animal.
  *
  * `frame` is the 60 fps counter; the pose runs on `beatOf` from it.
  */

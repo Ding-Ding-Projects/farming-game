@@ -36,9 +36,6 @@ import { artNoise, beatOf, mixHex, prefersReducedMotion } from './tiles'
 
 type Ctx = CanvasRenderingContext2D
 
-/** Machine icons are a full tile, so a shop row shows the real sprite. */
-export const MACHINE_ICON = TILE
-
 /* ------------------------------------------------------------------ *
  * Materials
  * ------------------------------------------------------------------ */
@@ -2170,7 +2167,7 @@ export function drawMachine(
   if (ready) readyGlow(ctx, sx, sy, beat)
 }
 
-/** The shop and queue icon: the same machine, idle and still, in a `MACHINE_ICON` box. */
+/** The shop and queue icon: the same machine, idle and still, in a full-tile box. */
 export function drawMachineIcon(ctx: Ctx, def: MachineDef, sx: number, sy: number): void {
   ellipse(ctx, sx + 16, sy + 30, 13, 2, withAlpha(PAL.ink, 0.22))
   const draw = MACHINE_DRAW[def.kind] ?? genericMachine

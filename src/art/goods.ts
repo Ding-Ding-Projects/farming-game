@@ -54,7 +54,7 @@ type Ctx = CanvasRenderingContext2D
 /** The default icon box: the old 12x12 cell, doubled. */
 export const ICON = 24
 /** The large icon box, for the almanac plate and the ledger header. */
-export const ICON_LARGE = 32
+const ICON_LARGE = 32
 
 /* ------------------------------------------------------------------ *
  * Shared materials
