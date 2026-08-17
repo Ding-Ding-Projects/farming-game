@@ -1,4 +1,15 @@
 import type { SEASONS } from './constants'
+import type {
+  Animal,
+  Building,
+  Loan,
+  Machine,
+  Market,
+  MaterialId,
+  Order,
+  Progression,
+  StallSlot,
+} from './farm-types'
 
 export type Season = (typeof SEASONS)[number]
 export type Weather = 'clear' | 'rain' | 'storm' | 'snow'
@@ -93,6 +104,10 @@ export type ItemRef =
   | { kind: 'seed'; cropId: string }
   | { kind: 'produce'; cropId: string; quality: Quality }
   | { kind: 'good'; goodId: GoodId }
+  /** Raw animal output and every factory product. Carries quality through the chain. */
+  | { kind: 'product'; productId: string; quality: Quality }
+  /** Wood, stone, planks, deeds. Not purchasable; never has a quality. */
+  | { kind: 'material'; materialId: MaterialId }
 
 export interface InventoryEntry {
   item: ItemRef
@@ -126,6 +141,20 @@ export interface GameState {
   stats: Stats
   /** True if the farmer ran out of energy or hit 2:00 AM and was carried home. */
   passedOut: boolean
+
+  // ---- wave 3: livestock, production, economy and progression ----
+  buildings: Building[]
+  animals: Animal[]
+  machines: Machine[]
+  /** Fodder held in the silo. Winter feeding draws on this. */
+  hay: number
+  progression: Progression
+  market: Market
+  /** Orders and crates currently offered or accepted. */
+  orders: Order[]
+  loans: Loan[]
+  /** Slots on the roadside stall, each with a player-set price. */
+  stall: StallSlot[]
 }
 
 /** Identifier for a runtime-synthesised sound effect. */
