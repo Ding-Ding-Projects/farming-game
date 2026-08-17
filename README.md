@@ -283,6 +283,14 @@ keyboard — the tab cycle was still modulo four after a fifth shelf was added �
 after that showed the fifth tab running off the panel edge and through the row counter. Both
 are fixed, and both were invisible to a test suite that only ever asked whether the code ran.
 
+Both suites also render every frame **twice**, from freshly built scenes, and require the
+bytes to match. A capture that changes between two runs of the same commit is not evidence
+of anything: it makes every later review a diff full of noise, and a real regression hides
+in the churn. That check found `panel-title` taking its ambient beat from wall time — it is
+the one panel with no farm behind it, and the farm is what pins the beat, so its chimney
+smoke and leaf fall landed on a different phase every render. The determinism claimed just
+above is now enforced rather than asserted.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
