@@ -59,25 +59,20 @@ const PLAYER_VERBS: readonly string[] = [
   'fulfilOrder',
   'takeLoan',
   'repayLoan',
+  'shipToBin',
+  'sellAtMarket',
+  'moveBuilding',
+  'demolishBuilding',
 ]
 
 /**
  * Verbs that are still orphaned, with what each one costs the player.
  *
- * This list is not a pass. It is the opposite: it is the bug, written down and executable,
- * so it cannot quietly become permanent the way the others nearly did. The test asserts
- * each one is *still* missing — so the day somebody wires one up, this fails and tells
- * them to move it into `PLAYER_VERBS`, where it will then be held forever.
- *
- * None of these is a hard block: the shop already buys produce, and a building can be
- * placed even if it cannot yet be moved. That is why they are here rather than fixed.
+ * Empty, and worth keeping empty rather than deleting: it is where a verb goes when it
+ * is written but not yet reachable, asserted ABSENT so that wiring one up turns this red
+ * and says to promote it. Every entry it once held has been promoted into PLAYER_VERBS.
  */
-const STILL_ORPHANED: Readonly<Record<string, string>> = {
-  shipToBin: 'the overnight shipping bin; the shop counter is the only sale route',
-  sellAtMarket: 'the market trip and its price bonus, paid for in energy and an hour',
-  moveBuilding: 'a building put down in the wrong place stays there',
-  demolishBuilding: 'and it cannot be pulled down either',
-}
+const STILL_ORPHANED: Readonly<Record<string, string>> = {}
 
 /**
  * Verbs no scene should call, with the reason. `cutGrass` is deliberately absent from

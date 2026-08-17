@@ -17,6 +17,13 @@ import { cropById } from '../../game/crops'
 import { productById } from '../../game/products'
 import { treeById } from '../../game/trees'
 import { sellValue } from '../../game/shop'
+import {
+  MARKET_BONUS,
+  MARKET_TRIP_MINUTES,
+  channelProceeds,
+  sellAtMarket,
+  shipToBin,
+} from '../../game/market'
 import { PAL } from '../../engine/palette'
 import { drawText, drawTextCentered, textWidth } from '../../engine/font'
 import { dither, hline, outline, rect, woodPanel } from '../../engine/pixel'
@@ -54,6 +61,22 @@ const CLOSE_W = 76
 const CLOSE_H = 28
 const CLOSE_X = PANEL_X + PANEL_W - CLOSE_W - 16
 const CLOSE_Y = PANEL_Y + PANEL_H - CLOSE_H - 14
+
+/**
+ * The two sale channels, on the bag rather than in the shop.
+ *
+ * `shipToBin` and `sellAtMarket` are the game's other two ways of turning a crop into
+ * gold, and neither had a way in: the bag told the player to go to the shop and the shop
+ * only ever offered the counter. They belong here because this is where the player is
+ * already looking at the thing they want to sell, and because the choice between them is
+ * a real one — the bin pays the closing price for nothing, the town pays more but costs
+ * an hour of daylight and the legs to get there.
+ */
+const CHANNEL_W = 168
+const CHANNEL_H = 28
+const CHANNEL_Y = CLOSE_Y
+const SHIP_X = PANEL_X + 16
+const TOWN_X = SHIP_X + CHANNEL_W + 10
 
 function inside(p: PointerState, x: number, y: number, w: number, h: number): boolean {
   return p.x >= x && p.x < x + w && p.y >= y && p.y < y + h
@@ -241,6 +264,59 @@ export function createInventoryScene(): Scene {
         drawText(g, 'SOW SOMETHING AND COME BACK.', INNER_X, DETAIL_Y, QUIET)
       }
 
+      // ---- the two sale channels ---------------------------------------
+      const chosen = count > 0 ? entries[selected] : undefined
+      const sellable =
+        chosen !== undefined && (chosen.item.kind === 'produce' || chosen.item.kind === 'product')
+      const stack = chosen === undefined ? 0 : chosen.count
+      const binTotal = sellable && chosen !== undefined ? channelProceeds(ctx.state, chosen.item, stack) : 0
+      const townTotal = Math.round(binTotal * MARKET_BONUS)
+      const hours = Math.round(MARKET_TRIP_MINUTES / 60)
+
+      const channel = (
+        label: string,
+        x: number,
+        on: boolean,
+      ): boolean => {
+        woodPanel(g, x, CHANNEL_Y, CHANNEL_W, CHANNEL_H, { thin: true })
+        const hovered = on && inside(p, x, CHANNEL_Y, CHANNEL_W, CHANNEL_H)
+        if (hovered) {
+          rect(
+            g,
+            x + BUTTON_INSET,
+            CHANNEL_Y + BUTTON_INSET,
+            CHANNEL_W - BUTTON_INSET * 2,
+            CHANNEL_H - BUTTON_INSET * 2,
+            PAL.lantern,
+          )
+        }
+        drawTextCentered(g, label, x + CHANNEL_W / 2, CHANNEL_Y + 10, PAL.ink, { small: true })
+        if (!on) {
+          dither(
+            g,
+            x + BUTTON_INSET,
+            CHANNEL_Y + BUTTON_INSET,
+            CHANNEL_W - BUTTON_INSET * 2,
+            CHANNEL_H - BUTTON_INSET * 2,
+            PAL.dusk,
+            0,
+            2,
+          )
+        }
+        return hovered && p.released
+      }
+
+      const shipHit = channel(
+        sellable && binTotal > 0 ? `1  SHIP ${stack} - ${binTotal}G` : '1  SHIP',
+        SHIP_X,
+        sellable && binTotal > 0,
+      )
+      const townHit = channel(
+        sellable && townTotal > 0 ? `2  TOWN ${stack} - ${townTotal}G` : `2  TOWN (+${hours}H)`,
+        TOWN_X,
+        sellable && townTotal > 0,
+      )
+
       woodPanel(g, CLOSE_X, CLOSE_Y, CLOSE_W, CLOSE_H, { thin: true })
       if (inside(p, CLOSE_X, CLOSE_Y, CLOSE_W, CLOSE_H)) {
         rect(
@@ -257,6 +333,24 @@ export function createInventoryScene(): Scene {
       ctx.toastY = LOGICAL_H - 8
 
       // ---- act ---------------------------------------------------------
+      // The channels run before the pocket verbs, because both act on the selected item
+      // and only one of them should fire on a frame.
+      if (chosen !== undefined && sellable) {
+        const ship = shipHit || input.pressed('Digit1') || input.pressed('Numpad1')
+        const town = townHit || input.pressed('Digit2') || input.pressed('Numpad2')
+        if (ship || town) {
+          // Every refusal — an empty bag, no daylight left, too tired for the walk — is
+          // still the verb's to make. This only decides which verb the player meant.
+          const result = ship
+            ? shipToBin(ctx.state, chosen.item, chosen.count)
+            : sellAtMarket(ctx.state, chosen.item, chosen.count)
+          ctx.state = result.state
+          playSound(result.sound)
+          ctx.say(result.message, result.ok ? 'good' : 'bad')
+          return null
+        }
+      }
+
       if (take && count > 0) {
         const item = entries[selected].item
         if (item.kind === 'seed') {
@@ -275,7 +369,7 @@ export function createInventoryScene(): Scene {
         ctx.say(
           item.kind === 'material'
             ? 'MATERIALS ARE SPENT ON BUILDING, NOT CARRIED.'
-            : 'PRODUCE AND GOODS SELL AT THE SHOP - PRESS B.',
+            : 'SELL IT: 1 SHIPS IT, 2 WALKS IT TO TOWN, OR THE SHOP COUNTER ON B.',
           'info',
         )
       }

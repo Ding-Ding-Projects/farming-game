@@ -47,7 +47,7 @@ import { formatClock, formatDate, isNight } from '../../game/time'
 import { buildingDef } from '../../game/buildings'
 import { speciesById } from '../../game/species'
 import { formatMaterials, missingMaterials, xpProgress } from '../../game/progression'
-import { canPlace, placeBuilding, placementMessage } from '../../game/placement'
+import { canPlace, moveBuilding, placeBuilding, placementMessage } from '../../game/placement'
 import { machineAt, machineDefFor, machineLevel, placeMachine } from '../../game/production'
 import { buildingDoorAt, doorOf } from '../../game/interiors'
 import { canGraze } from '../../game/livestock'
@@ -395,6 +395,8 @@ function animalSpot(
 interface Placing {
   kind: string
   machine: boolean
+  /** Set when this is a relocation of a standing building rather than a new one. */
+  moveId?: string
   name: string
   /** Real for a building; for a machine, the one-tile stand-in the ghost is drawn from. */
   def: BuildingDef
@@ -901,6 +903,7 @@ export function createWorldScene(): Scene {
         next = {
           kind: def.kind,
           machine: false,
+          moveId: request.moveId,
           name: def.name.toUpperCase(),
           def,
           x: 0,
@@ -978,7 +981,9 @@ export function createWorldScene(): Scene {
 
     const result = plan.machine
       ? placeMachine(ctx.state, plan.kind, tileIndex(plan.x, plan.y))
-      : placeBuilding(ctx.state, plan.kind, plan.x, plan.y)
+      : plan.moveId !== undefined
+        ? moveBuilding(ctx.state, plan.moveId, plan.x, plan.y)
+        : placeBuilding(ctx.state, plan.kind, plan.x, plan.y)
     applyResult(ctx, result)
     if (result.ok) placing = null
   }
