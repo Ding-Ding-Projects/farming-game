@@ -741,26 +741,54 @@ function rooms(): RoomShot[] {
  */
 /* ------------------------------------------------------------------ tests */
 
+/** Every world capture, rebuilt fresh on each call so a second render is independent. */
+function worldShots(): Shot[] {
+  return [
+    field('farm-spring-midday', { minutes: 12 * 60 }),
+    field('farm-evening', { minutes: 19 * 60 }),
+    field('farm-night', { minutes: 23 * 60 }),
+    field('farm-rain', { minutes: 11 * 60, weather: 'rain' }),
+    wintering(),
+    orchard(),
+    ranch(),
+    works(),
+    placing(),
+  ]
+}
+
+/**
+ * The world band only — the HUD and belt are drawn by the scene layer, which needs a live
+ * Input and UI, so cropping is honest where faking them would not be. The band is the full
+ * 640 wide because the 20 x 11 farm still fits on screen whole.
+ */
+const BAND: Region = { x: 0, y: WORLD_Y, w: FARM_W * TILE, h: WORLD_H }
+
+/** One world capture, drawn into a fresh raster and encoded. */
+function drawWorldPng(shot: Shot): Buffer {
+  const raster = new Raster(LOGICAL_W, LOGICAL_H)
+  drawWorld(raster, shot.state, shot.frame, shot.decor)
+  return encodePng(raster, 2, BAND)
+}
+
+/** One room capture, drawn into a fresh raster and encoded. */
+function drawRoomPng(shot: RoomShot): Buffer {
+  const raster = new Raster(LOGICAL_W, LOGICAL_H)
+  drawRoom(
+    raster as unknown as CanvasRenderingContext2D,
+    shot.interior,
+    shot.frame,
+    (station) => roomStationState(shot.state, shot.interior, station),
+    shot.farmer === null ? null : { ...shot.farmer, tool: shot.state.tool, walkFrame: null },
+  )
+  return encodePng(raster, 2, BAND)
+}
+
 describe.skipIf(process.env.SHOTS !== '1')('screenshot renderer', () => {
   it('renders real game frames to PNG', () => {
     fs.mkdirSync(OUT, { recursive: true })
 
-    const shots: Shot[] = [
-      field('farm-spring-midday', { minutes: 12 * 60 }),
-      field('farm-evening', { minutes: 19 * 60 }),
-      field('farm-night', { minutes: 23 * 60 }),
-      field('farm-rain', { minutes: 11 * 60, weather: 'rain' }),
-      wintering(),
-      orchard(),
-      ranch(),
-      works(),
-      placing(),
-    ]
-
-    // The world band only — the HUD and belt are drawn by the scene layer, which needs
-    // a live Input and UI, so cropping is honest where faking them would not be. The
-    // band is the full 640 wide because the 20 x 11 farm still fits on screen whole.
-    const region: Region = { x: 0, y: WORLD_Y, w: FARM_W * TILE, h: WORLD_H }
+    const shots = worldShots()
+    const region = BAND
     expect(region.w).toBe(LOGICAL_W)
     expect(WORLD_Y + WORLD_H).toBeLessThanOrEqual(LOGICAL_H)
 
@@ -820,6 +848,43 @@ describe.skipIf(process.env.SHOTS !== '1')('screenshot renderer', () => {
       expect(s.colors).toBeGreaterThan(40)
       expect(s.holes).toBe(0)
       expect(png.length).toBeGreaterThan(4000)
+    }
+  })
+
+  /**
+   * Every capture must be a function of the code alone.
+   *
+   * A frame that differs between two runs of the same commit is not evidence of anything:
+   * it makes every future review a diff full of noise, and a real regression hides in the
+   * churn. The panel captures had exactly this fault — one frame took its ambient beat
+   * from wall time — so the world and the rooms are held to the same bar rather than
+   * trusted because `drawWorld` happens to pin the beat today.
+   *
+   * Both sides are built from a fresh call, because a shot's `GameState` is handed to the
+   * draw code directly; re-drawing the same object would prove less than it appears to.
+   */
+  it('draws the same bytes twice, so a capture is never noise', () => {
+    const worldA = worldShots()
+    const worldB = worldShots()
+    expect(worldB).toHaveLength(worldA.length)
+
+    for (let i = 0; i < worldA.length; i += 1) {
+      const a = worldA[i] as Shot
+      const b = worldB[i] as Shot
+      expect(b.name).toBe(a.name)
+      expect(drawWorldPng(b), `${a.name} is not reproducible`).toEqual(drawWorldPng(a))
+    }
+
+    const roomsA = rooms()
+    const roomsB = rooms()
+    expect(roomsB).toHaveLength(roomsA.length)
+
+    for (let i = 0; i < roomsA.length; i += 1) {
+      const a = roomsA[i]
+      const b = roomsB[i]
+      if (a === undefined || b === undefined) throw new Error('room shot list changed length')
+      expect(b.name).toBe(a.name)
+      expect(drawRoomPng(b), `${a.name} is not reproducible`).toEqual(drawRoomPng(a))
     }
   })
 })

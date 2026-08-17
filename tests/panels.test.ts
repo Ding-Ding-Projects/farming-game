@@ -43,6 +43,7 @@ import { createStallScene } from '../src/renderer/scenes/stall'
 import { createBuildingScene } from '../src/renderer/scenes/building'
 import { createInteriorScene } from '../src/renderer/scenes/interior'
 import { createWorldScene } from '../src/renderer/scenes/world'
+import { setAmbientFrame } from '../src/art/scenery'
 import { Raster, encodePng, survey } from './raster'
 import type { Region } from './raster'
 import type { Scene } from '../src/renderer/scene'
@@ -290,40 +291,59 @@ function panels(): PanelShot[] {
 
 /* ------------------------------------------------------------------ tests */
 
+/** The whole frame, HUD and belt included: these are scene captures, so nothing is faked. */
+const REGION: Region = { x: 0, y: 0, w: LOGICAL_W, h: LOGICAL_H }
+
+/**
+ * Drives one shot's scene for real and returns the raster it drew into.
+ *
+ * Kept separate from the test body so the same shot can be drawn twice from two freshly
+ * built scenes — scenes and their state are mutated as they run, so a second render has
+ * to start from a new one to mean anything.
+ */
+function render(shot: PanelShot): Raster {
+  const raster = new Raster(LOGICAL_W, LOGICAL_H)
+  const ctx = new SceneContext(raster as unknown as CanvasRenderingContext2D, shot.state)
+  const ui = realUi()
+
+  // Sprites that take no frame argument read their beat from here, and fall back to wall
+  // time when nothing has pinned it. Panels drawn over the farm are pinned for free,
+  // because the world scene sets it as it draws — but a panel with no world underneath is
+  // not, and `panel-title` was rendering a different chimney-smoke and leaf-fall phase on
+  // every run. Pin it here for every shot rather than relying on a later scene to do it.
+  setAmbientFrame(0)
+
+  if (shot.overWorld === true) {
+    // One frame of the real farm underneath, the way the shell stacks it.
+    const world = createWorldScene()
+    world.update(ctx, idleInput(), ui, 16, 6)
+    // The world scene owns ctx.state while it runs; put the shot's state back so the
+    // panel is drawn against the state it was built for.
+    ctx.state = shot.state
+  }
+
+  const frames = Math.max(1, shot.warm ?? 1)
+  for (let f = 0; f < frames; f += 1) {
+    const key = shot.keys?.[f]
+    const input = key === undefined ? idleInput() : keyedInput(key)
+    // A scene that throws fails here rather than writing a plausible-looking frame.
+    shot.scene.update(ctx, input, ui, 16, f * 3)
+  }
+  return raster
+}
+
 describe.skipIf(process.env.SHOTS !== '1')('panel captures', () => {
   it('renders every destination through its real scene', () => {
     fs.mkdirSync(OUT, { recursive: true })
 
-    // The whole frame this time, HUD and belt included: these are scene captures, so
-    // there is no chrome being faked and nothing to crop away.
-    const region: Region = { x: 0, y: 0, w: LOGICAL_W, h: LOGICAL_H }
+    const region = REGION
     const seen = new Set<string>()
 
     for (const shot of panels()) {
       expect(seen.has(shot.name), `duplicate capture name ${shot.name}`).toBe(false)
       seen.add(shot.name)
 
-      const raster = new Raster(LOGICAL_W, LOGICAL_H)
-      const ctx = new SceneContext(raster as unknown as CanvasRenderingContext2D, shot.state)
-      const ui = realUi()
-
-      if (shot.overWorld === true) {
-        // One frame of the real farm underneath, the way the shell stacks it.
-        const world = createWorldScene()
-        world.update(ctx, idleInput(), ui, 16, 6)
-        // The world scene owns ctx.state while it runs; put the shot's state back so the
-        // panel is drawn against the state it was built for.
-        ctx.state = shot.state
-      }
-
-      const frames = Math.max(1, shot.warm ?? 1)
-      for (let f = 0; f < frames; f += 1) {
-        const key = shot.keys?.[f]
-        const input = key === undefined ? idleInput() : keyedInput(key)
-        // A scene that throws fails here rather than writing a plausible-looking frame.
-        shot.scene.update(ctx, input, ui, 16, f * 3)
-      }
-
+      const raster = render(shot)
       const png = encodePng(raster, 2, region)
       fs.writeFileSync(path.join(OUT, `${shot.name}.png`), png)
 
@@ -337,6 +357,31 @@ describe.skipIf(process.env.SHOTS !== '1')('panel captures', () => {
       expect(s.colors, `${shot.name} has too few colours to be a real frame`).toBeGreaterThan(16)
       expect(s.holes, `${shot.name} left ${s.holes} pixels undrawn`).toBe(0)
       expect(png.length).toBeGreaterThan(2000)
+    }
+  })
+
+  /**
+   * Every capture must be a function of the code alone.
+   *
+   * A frame that differs between two runs of the same commit is not evidence of anything:
+   * it turns every future review into a diff full of noise, and a real regression hides in
+   * the churn. This is how `panel-title` was caught taking its ambient beat from wall time
+   * — it was the one panel with no farm behind it to pin the beat, so its chimney smoke
+   * and leaf fall landed on a different phase every render.
+   *
+   * Both sides are built from a fresh `panels()`, because scenes and their state are
+   * mutated as they run; re-driving the same scene object would prove nothing.
+   */
+  it('draws the same bytes twice, so a capture is never noise', () => {
+    const first = panels()
+    const second = panels()
+    expect(second).toHaveLength(first.length)
+
+    for (let i = 0; i < first.length; i += 1) {
+      expect(second[i]?.name).toBe(first[i]?.name)
+      const a = encodePng(render(first[i] as PanelShot), 2, REGION)
+      const b = encodePng(render(second[i] as PanelShot), 2, REGION)
+      expect(b, `${first[i]?.name} is not reproducible`).toEqual(a)
     }
   })
 })
