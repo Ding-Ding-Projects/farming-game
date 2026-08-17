@@ -14,17 +14,19 @@
  * the ring under the player. Row cursor, column cursor and scroll are owned here and
  * the plates are drawn to match `DESIGN.md` section 6 exactly.
  */
-import type { ActionResult, ItemRef } from '../../game/types'
-import type { BuildingDef, MachineDef, MaterialId } from '../../game/farm-types'
+import type { ActionResult, GameState, ItemRef } from '../../game/types'
+import type { Building, BuildingDef, MachineDef, MaterialId, SpeciesDef, SpeciesId } from '../../game/farm-types'
 import type { PointerState } from '../../engine/input'
 import type { Scene, SceneCommand, SceneContext } from '../scene'
 import { LOGICAL_H, LOGICAL_W, WORLD_Y } from '../../game/constants'
 import { countItem, itemName } from '../../game/state'
 import { buy, sell, sellAllProduce, sellValue, shopStock } from '../../game/shop'
-import { BUILDINGS } from '../../game/buildings'
+import { BUILDINGS, buildingDef } from '../../game/buildings'
 import { MACHINES } from '../../game/factories'
 import { machineLevel } from '../../game/production'
 import { formatMaterials } from '../../game/progression'
+import { SPECIES } from '../../game/species'
+import { ageInDays, animalsIn, buyAnimal, housesSpecies } from '../../game/livestock'
 import { cropById } from '../../game/crops'
 import { productById } from '../../game/products'
 import { treeById } from '../../game/trees'
@@ -38,6 +40,7 @@ import { drawProduceIcon, drawSeedIcon } from '../../art/plants'
 import { drawGoodIcon } from '../../art/actors'
 import { drawMaterialIcon, drawProductIcon } from '../../art/goods'
 import { drawMachineIcon } from '../../art/structures'
+import { drawAnimalIcon } from '../../art/livestock'
 
 /* ------------------------------------------------------------------ *
  * The build request
@@ -96,6 +99,11 @@ const SELL_W = 52
 /** The single wide plate on the right of a build row, and of the footer. */
 const RIGHT_X = 500
 const RIGHT_W = 118
+/** The animal row's "which building" selector, left of the BUY plate. */
+const HOME_X = 330
+const HOME_W = 160
+/** The animal shelf's note has less room than the others, to leave the selector clear. */
+const ANIMAL_NOTE_W = 250
 
 const FOOT_RULE = ROW_Y + VISIBLE * ROW_H + 8
 const FOOT_Y = FOOT_RULE + 8
@@ -107,8 +115,8 @@ const QUIET = mixHex(PAL.ink, PAL.parchment, 0.4)
 const STRIPE = mixHex(PAL.parchment, PAL.soil, 0.1)
 const CELL_EDGE = mixHex(PAL.parchment, PAL.ink, 0.3)
 
-const TABS = ['STOCK', 'BUILDINGS', 'MACHINES'] as const
-type TabIndex = 0 | 1 | 2
+const TABS = ['STOCK', 'BUILDINGS', 'MACHINES', 'ANIMALS'] as const
+type TabIndex = 0 | 1 | 2 | 3
 
 /* ------------------------------------------------------------------ widgets */
 
@@ -317,6 +325,147 @@ function machineRows(ctx: SceneContext): Row[] {
   })
 }
 
+/* ------------------------------------------------------------------ animals */
+
+interface HomeOption {
+  building: Building
+  capacity: number
+  /** Free stalls left in this building right now. */
+  room: number
+}
+
+/** Every building on the farm that will take this species, full or not. */
+function housingOptions(state: GameState, def: SpeciesDef): HomeOption[] {
+  const options: HomeOption[] = []
+  for (const building of state.buildings) {
+    if (!housesSpecies(building.kind, def.id)) continue
+    const capacity = buildingDef(building.kind)?.capacity ?? 0
+    options.push({ building, capacity, room: capacity - animalsIn(state, building.id).length })
+  }
+  return options
+}
+
+/** What `def.produces` reads as on the shelf: the product names, or a plain "no produce". */
+function producesNote(def: SpeciesDef): string {
+  if (def.produces.length === 0) return 'NO PRODUCE - FOR RIDING'
+  return def.produces
+    .map((p) => (productById(p.productId)?.name ?? p.productId.replace(/[-_]/g, ' ').toUpperCase()))
+    .join(', ')
+}
+
+/** A short, memorable pool. `buyAnimal` caps a name at twelve letters, so every entry
+ * here, even with a " N" suffix for a clash, stays well inside that. */
+const ANIMAL_NAMES = [
+  'REX', 'DAISY', 'CLOVER', 'BISCUIT', 'PEANUT', 'MABEL', 'WALNUT', 'PATCH',
+  'GINGER', 'HAZEL', 'PEBBLES', 'OLIVE', 'NUTMEG', 'PIPPIN', 'RUSTY', 'MOSSY',
+  'BRAMBLE', 'SAFFRON', 'JUNIPER', 'MARIGOLD',
+] as const
+
+/** FNV-1a, so the same species and herd size always proposes the same name. */
+function hashText(text: string): number {
+  let h = 2166136261
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+/**
+ * A ready-to-use name, so buying an animal is one action rather than a text field.
+ * Deterministic off the herd as it stands, and bumped with a number on the rare clash
+ * so `buyAnimal`'s own uniqueness check never has cause to refuse it.
+ */
+function defaultAnimalName(state: GameState, species: SpeciesId): string {
+  const base = ANIMAL_NAMES[hashText(`${species}:${state.animals.length}`) % ANIMAL_NAMES.length]
+  const taken = new Set(state.animals.map((a) => a.name.trim().toUpperCase()))
+  if (!taken.has(base)) return base
+  for (let n = 2; n < 100; n++) {
+    const candidate = `${base} ${n}`
+    if (!taken.has(candidate)) return candidate
+  }
+  return `${base} ${state.animals.length}`
+}
+
+/**
+ * One row per species in the catalogue, per `docs/CATALOG.md` §3. A species the player's
+ * level has not reached, or that has nowhere to live, or whose homes are all full, is
+ * still listed — greyed, with the exact reason on it — rather than hidden.
+ */
+function animalRows(
+  ctx: SceneContext,
+  take: (result: ActionResult) => void,
+  selectedHome: Map<SpeciesId, number>,
+): Row[] {
+  const state = ctx.state
+  const level = state.progression.level
+
+  return SPECIES.map((def): Row => {
+    const locked = level < def.level
+    const homeName = buildingDef(def.housedIn[0])?.name ?? def.housedIn[0].toUpperCase()
+
+    const options = housingOptions(state, def)
+    const available = options.filter((o) => o.room > 0)
+    const noHousing = options.length === 0
+    const full = !noHousing && available.length === 0
+    const unhoused = noHousing || full
+
+    let homeIndex = selectedHome.get(def.id) ?? 0
+    if (homeIndex < 0 || homeIndex >= available.length) homeIndex = 0
+    const chosen = available[homeIndex]
+
+    const note = locked
+      ? `NEEDS LEVEL ${def.level} - ${producesNote(def)}`
+      : noHousing
+        ? `NO ${homeName} - ${producesNote(def)}`
+        : full
+          ? `${homeName} IS FULL - ${producesNote(def)}`
+          : `${producesNote(def)} - ${ageInDays(def.id)} DAYS TO FIRST`
+
+    const actions: Action[] = []
+    if (available.length > 1) {
+      const homeDef = buildingDef(chosen.building.kind)
+      const occupied = chosen.capacity - chosen.room
+      actions.push({
+        label: `${homeDef?.name ?? chosen.building.kind} ${occupied}/${chosen.capacity}`,
+        x: HOME_X,
+        w: HOME_W,
+        disabled: false,
+        run: () => {
+          selectedHome.set(def.id, (homeIndex + 1) % available.length)
+          playSound('select')
+          return null
+        },
+      })
+    }
+    actions.push({
+      label: 'BUY',
+      x: RIGHT_X,
+      w: RIGHT_W,
+      disabled: locked || unhoused || state.gold < def.cost || chosen === undefined,
+      run: () => {
+        if (chosen === undefined) return null
+        take(buyAnimal(state, def.id, chosen.building.id, defaultAnimalName(state, def.id)))
+        return null
+      },
+    })
+
+    return {
+      title: def.name.toUpperCase(),
+      note,
+      price: `${def.cost}G`,
+      priceWarn: state.gold < def.cost,
+      held: '',
+      locked: locked || unhoused,
+      icon: (g, x, y) => {
+        drawAnimalIcon(g, def, x, y)
+      },
+      actions,
+      spoken: `${def.name}, ${def.cost} GOLD, ${note}`,
+    }
+  })
+}
+
 function stockRows(ctx: SceneContext, take: (result: ActionResult) => void): Row[] {
   const state = ctx.state
   return shopStock(state).map((entry): Row => {
@@ -381,6 +530,8 @@ export function createShopScene(): Scene {
   let col = 0
   let scroll = 0
   let spokenRow = -1
+  /** Which of a species' qualifying buildings is picked, kept across frames by species id. */
+  const selectedHome = new Map<SpeciesId, number>()
 
   /**
    * `cursor === count` is the footer, which is a row of the list as far as the keyboard
@@ -426,7 +577,13 @@ export function createShopScene(): Scene {
       }
 
       const rows =
-        tab === 0 ? stockRows(ctx, take) : tab === 1 ? buildingRows(ctx) : machineRows(ctx)
+        tab === 0
+          ? stockRows(ctx, take)
+          : tab === 1
+            ? buildingRows(ctx)
+            : tab === 2
+              ? machineRows(ctx)
+              : animalRows(ctx, take, selectedHome)
 
       // The footer is the last row of the list. Built before the cursor is clamped so
       // its width is known to the column cursor.
@@ -479,8 +636,8 @@ export function createShopScene(): Scene {
       if (input.repeated('ArrowLeft') || input.repeated('KeyA')) moveCol(-1)
       if (input.repeated('PageDown')) moveRow(VISIBLE)
       if (input.repeated('PageUp')) moveRow(-VISIBLE)
-      if (input.pressed('KeyE') || input.pressed('Tab')) setTab(ctx, ((tab + 1) % 3) as TabIndex)
-      if (input.pressed('KeyQ')) setTab(ctx, ((tab + 2) % 3) as TabIndex)
+      if (input.pressed('KeyE') || input.pressed('Tab')) setTab(ctx, ((tab + 1) % 4) as TabIndex)
+      if (input.pressed('KeyQ')) setTab(ctx, ((tab + 3) % 4) as TabIndex)
 
       const activate = input.pressed('Enter') || input.pressed('NumpadEnter') || input.pressed('Space')
 
@@ -535,7 +692,9 @@ export function createShopScene(): Scene {
           drawText(g, row.price, PRICE_X, ry + 4, row.priceWarn ? PAL.berry : PAL.ink)
         }
         if (row.held.length > 0) drawText(g, row.held, HELD_X, ry + 4, QUIET)
-        drawText(g, row.note, TITLE_X, ry + 19, QUIET, { maxWidth: 350 })
+        drawText(g, row.note, TITLE_X, ry + 19, QUIET, {
+          maxWidth: tab === 3 ? ANIMAL_NOTE_W : 350,
+        })
 
         for (let a = 0; a < row.actions.length; a++) {
           const action = row.actions[a]

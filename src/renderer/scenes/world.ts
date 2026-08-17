@@ -48,7 +48,8 @@ import { buildingDef } from '../../game/buildings'
 import { speciesById } from '../../game/species'
 import { formatMaterials, missingMaterials, xpProgress } from '../../game/progression'
 import { canPlace, placeBuilding, placementMessage } from '../../game/placement'
-import { machineDefFor, machineLevel, placeMachine } from '../../game/production'
+import { machineAt, machineDefFor, machineLevel, placeMachine } from '../../game/production'
+import { buildingDoorAt, doorOf } from '../../game/interiors'
 import { PAL, withAlpha } from '../../engine/palette'
 import { drawText, textWidth } from '../../engine/font'
 import { dither, ellipse, hline, outline, px, rect, vline, woodPanel } from '../../engine/pixel'
@@ -76,6 +77,8 @@ import { createShopScene, takeBuildRequest } from './shop'
 import { createInventoryScene } from './inventory'
 import { createSleepScene } from './sleep'
 import { createHelpScene } from './help'
+import { createInteriorScene } from './interior'
+import { createMachineScene } from './machine'
 
 /** One tile every 180 ms, the tween length from DESIGN section 5. */
 const MOVE_MS = 180
@@ -435,6 +438,64 @@ function machineGhostDef(def: MachineDef, level: number): BuildingDef {
 }
 
 /* ------------------------------------------------------------------ the scene */
+
+/**
+ * What using the faced tile opens, or null when it is ordinary ground and the held tool
+ * should swing instead. A door and a machine answer to the same button as a crop row:
+ * `docs/INTERIORS.md` section 2 is the whole argument for why there is no separate key.
+ */
+function enter(ctx: SceneContext, index: number): SceneCommand | null {
+  const state = ctx.state
+  const machine = machineAt(state, index)
+  if (machine !== null) {
+    playSound('select')
+    return { kind: 'push', scene: createMachineScene(machine.id) }
+  }
+
+  const x = index % FARM_W
+  const y = Math.floor(index / FARM_W)
+  const building = buildingDoorAt(state, x, y)
+  if (building !== null) {
+    playSound('select')
+    return { kind: 'push', scene: createInteriorScene(building.id) }
+  }
+  return null
+}
+
+/**
+ * The AHEAD line. A building tile is not `A BUILDING` — it is the coop, and if the farmer
+ * is standing at its door it says so, because that is the difference between a wall and a
+ * way in.
+ */
+function facedLabel(state: GameState): string {
+  const index = facingIndex(state)
+  const x = index % FARM_W
+  const y = Math.floor(index / FARM_W)
+
+  const machine = machineAt(state, index)
+  if (machine !== null) {
+    const def = machineDefFor(machine.kind)
+    return `${def === null ? machine.kind.toUpperCase() : def.name.toUpperCase()} - USE TO OPEN`
+  }
+
+  const door = buildingDoorAt(state, x, y)
+  if (door !== null) {
+    const def = buildingDef(door.kind)
+    return `${def === undefined ? door.kind.toUpperCase() : def.name} DOOR - USE TO GO IN`
+  }
+
+  const tile = state.tiles[index]
+  if (tile !== undefined && tile.buildingId !== null) {
+    const owner = state.buildings.find((b) => b.id === tile.buildingId)
+    const def = owner === undefined ? undefined : buildingDef(owner.kind)
+    if (owner !== undefined) {
+      const at = doorOf(owner)
+      return `${def === null || def === undefined ? owner.kind.toUpperCase() : def.name} - DOOR IS AT ${at.x + 1},${at.y + 1}`
+    }
+  }
+
+  return tileLabel(state.tiles[index])
+}
 
 interface Actor {
   /** The bottom row of the thing, in framebuffer pixels. Sorted ascending. */
@@ -1065,8 +1126,7 @@ export function createWorldScene(): Scene {
         ? 'SEED: NONE - Q OR E PICKS ONE'
         : `SEED: ${crop.name} X${countItem(state, { kind: 'seed', cropId: crop.id })}`
     drawText(g, seedLine, INFO_X, INFO_LINES[1], PAL.ink, { maxWidth: INFO_W })
-    const facing = state.tiles[facingIndex(state)]
-    drawText(g, `AHEAD: ${tileLabel(facing)}`, INFO_X, INFO_LINES[2], PAL.ink, { maxWidth: INFO_W })
+    drawText(g, `AHEAD: ${facedLabel(state)}`, INFO_X, INFO_LINES[2], PAL.ink, { maxWidth: INFO_W })
   }
 
   /* ------------------------------------------------------------------ frame */
@@ -1117,10 +1177,17 @@ export function createWorldScene(): Scene {
         }
 
         if (input.pressed('Space') || input.pressed('Enter') || input.pressed('NumpadEnter')) {
-          swingT = SWING_MS
-          applyResult(ctx, useTool(ctx.state))
+          // A door and a machine are used with the same button as a crop row, because
+          // that is the one verb this game has. `docs/INTERIORS.md` section 2.
+          const entered = enter(ctx, faced)
+          if (entered !== null) {
+            command = entered
+          } else {
+            swingT = SWING_MS
+            applyResult(ctx, useTool(ctx.state))
+          }
         }
-        command = handleKeys(ctx, input)
+        if (command === null) command = handleKeys(ctx, input)
       }
 
       swingT = Math.max(0, swingT - dt)

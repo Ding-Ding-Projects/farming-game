@@ -53,6 +53,12 @@ import {
 } from '../src/art/scenery'
 import { drawAnimal } from '../src/art/livestock'
 import { drawBuilding, drawBuildingGhost, drawMachine } from '../src/art/structures'
+import { drawRoom } from '../src/art/interiors'
+import { interiorFor } from '../src/game/interiors'
+import { animalsIn, isProduceReady } from '../src/game/livestock'
+import { machineStatus } from '../src/game/production'
+import type { Interior, Station } from '../src/game/interiors'
+import type { StationState } from '../src/art/interiors'
 import type { GameState, Ground, Plant, Season, Tile } from '../src/game/types'
 import type { Animal, Building, Machine } from '../src/game/farm-types'
 
@@ -778,6 +784,173 @@ interface Survey {
   holes: number
 }
 
+/* ------------------------------------------------------- inside a building */
+
+/**
+ * An interior shot is the same trick as a farm shot, one layer up: it drives the real
+ * `drawRoom` from `src/art/interiors.ts` — the identical call `src/renderer/scenes/
+ * interior.ts` makes every frame — against a real `interiorFor` derived from a real
+ * `GameState`. Nothing about the room is mocked, so a picture here that looks wrong is
+ * the game looking wrong.
+ */
+interface RoomShot {
+  name: string
+  state: GameState
+  interior: Interior
+  farmer: { x: number; y: number; facing: 'up' | 'down' | 'left' | 'right' } | null
+  frame: number
+}
+
+/** The same read of live state the scene layer makes, so the art cannot flatter itself. */
+function roomStationState(
+  state: GameState,
+  interior: Interior,
+  station: Station,
+): StationState {
+  switch (station.kind) {
+    case 'pen': {
+      const animal = state.animals.find((a) => a.id === station.ref)
+      if (animal === undefined) return { occupied: false, ready: false, wanting: false }
+      return {
+        occupied: true,
+        ready: isProduceReady(state, animal),
+        wanting: !animal.fedToday,
+        occupant: animal.outside ? null : { species: requireSpecies(animal.species), animal },
+      }
+    }
+    case 'trough':
+      return {
+        occupied: true,
+        ready: false,
+        wanting: animalsIn(state, interior.buildingId).some((a) => !a.fedToday),
+      }
+    case 'nest':
+      return {
+        occupied: true,
+        ready: animalsIn(state, interior.buildingId).some((a) => isProduceReady(state, a)),
+        wanting: false,
+      }
+    case 'bench': {
+      const status = station.ref === null ? null : machineStatus(state, station.ref)
+      return {
+        occupied: status !== null && status.active !== null,
+        ready: status !== null && status.readyCount > 0,
+        wanting: false,
+      }
+    }
+    case 'counter': {
+      const slot = station.ref === null ? undefined : state.stall[Number(station.ref)]
+      return {
+        occupied: slot !== undefined && slot.item !== null && slot.count > 0,
+        ready: false,
+        wanting: false,
+      }
+    }
+    default:
+      return { occupied: true, ready: false, wanting: false }
+  }
+}
+
+function inside(
+  name: string,
+  kind: string,
+  build: (state: GameState, building: Building) => void,
+  farmer: RoomShot['farmer'] = null,
+  frame = 14,
+): RoomShot {
+  const base = established(createState(SEED))
+  const tiles = copyTiles(base)
+  const buildings: Building[] = []
+  const building = raise(tiles, buildings, kind, 2, 2)
+
+  const state: GameState = { ...base, tiles, buildings, animals: [], machines: [] }
+  build(state, building)
+
+  const interior = interiorFor(state, building.id)
+  if (interior === null) throw new Error(`no interior for ${kind}`)
+  return { name, state, interior, farmer, frame }
+}
+
+/** The rooms worth a picture: one of each kind of thing a room can be. */
+function rooms(): RoomShot[] {
+  return [
+    // A working coop: four nests, one with an egg in it, one bird still hungry.
+    inside(
+      'inside-coop',
+      'big-coop',
+      (state, b) => {
+        // `beast` puts an animal out to graze by default. Inside a coop they are, by
+        // definition, in it — an animal that is outside shows an empty pen, correctly.
+        beast(state.animals, 'chicken', b.id, { outside: false, daysUntilProduce: 0 })
+        beast(state.animals, 'chicken', b.id, { outside: false, fedToday: false, daysUntilProduce: 2 })
+        beast(state.animals, 'duck', b.id, { outside: false, daysUntilProduce: 0 })
+        beast(state.animals, 'turkey', b.id, { outside: false, daysUntilProduce: 3 })
+        state.hay = 140
+      },
+      { x: 5, y: 4, facing: 'up' },
+    ),
+
+    // A full barn, so the pen grid is shown at the size it actually wraps at.
+    inside(
+      'inside-barn',
+      'big-barn',
+      (state, b) => {
+        beast(state.animals, 'cow', b.id, { outside: false, daysUntilProduce: 0 })
+        beast(state.animals, 'cow', b.id, { outside: false, fedToday: false })
+        beast(state.animals, 'goat', b.id, { outside: false, daysUntilProduce: 0 })
+        beast(state.animals, 'sheep', b.id, { outside: false })
+        beast(state.animals, 'sheep', b.id, { outside: false, fedToday: false })
+        state.hay = 220
+      },
+      { x: 7, y: 5, facing: 'left' },
+    ),
+
+    // Home: the bed, the chest and the order board.
+    inside('inside-farmhouse', 'farmhouse', () => {}, { x: 5, y: 4, facing: 'up' }),
+
+    // A workroom with a bench per hosted machine, one working and one holding output.
+    inside(
+      'inside-bakery',
+      'bakery',
+      (state) => {
+        install(state.tiles, state.machines, 'bakery', 14, 8, 'working')
+        install(state.tiles, state.machines, 'pie-oven', 15, 8, 'ready')
+        install(state.tiles, state.machines, 'ice-cream-maker', 16, 8, 'idle')
+      },
+      { x: 6, y: 5, facing: 'up' },
+    ),
+
+    // The roadside stall from behind the counters, some slots stocked and some bare.
+    inside(
+      'inside-stall',
+      'stall',
+      (state) => {
+        state.stall = [0, 1, 2, 3, 4, 5].map((i) => ({
+          item: i % 2 === 0 ? { kind: 'produce' as const, cropId: 'potato', quality: 'normal' as const } : null,
+          count: i % 2 === 0 ? 12 : 0,
+          price: i % 2 === 0 ? 40 + i * 3 : 0,
+          sold: 0,
+        }))
+      },
+      { x: 6, y: 2, facing: 'up' },
+    ),
+
+    // The extremes of the material set: a hewn rock room, and a glasshouse.
+    inside('inside-mine', 'mine', () => {}, { x: 7, y: 5, facing: 'right' }),
+    inside('inside-greenhouse', 'greenhouse', () => {}, { x: 7, y: 5, facing: 'up' }),
+
+    // The silo: one big stack of bales and nothing else, which is the point of it.
+    inside(
+      'inside-silo',
+      'silo',
+      (state) => {
+        state.hay = 200
+      },
+      { x: 3, y: 4, facing: 'right' },
+    ),
+  ]
+}
+
 /**
  * Measured inside the cropped region only. The HUD and belt bands sit outside it and
  * are never painted here, so counting them would let a blank world hide behind a
@@ -847,6 +1020,43 @@ describe.skipIf(process.env.SHOTS !== '1')('screenshot renderer', () => {
       // with a hole in it is a tile that never drew.
       expect(s.spread).toBeGreaterThan(30)
       expect(s.colors).toBeGreaterThan(64)
+      expect(s.holes).toBe(0)
+      expect(png.length).toBeGreaterThan(4000)
+    }
+  })
+
+  it('renders the inside of a building to PNG', () => {
+    fs.mkdirSync(OUT, { recursive: true })
+
+    const region: Region = { x: 0, y: WORLD_Y, w: FARM_W * TILE, h: WORLD_H }
+
+    for (const shot of rooms()) {
+      const raster = new Raster(LOGICAL_W, LOGICAL_H)
+      drawRoom(
+        raster as unknown as CanvasRenderingContext2D,
+        shot.interior,
+        shot.frame,
+        (station) => roomStationState(shot.state, shot.interior, station),
+        shot.farmer === null
+          ? null
+          : { ...shot.farmer, tool: shot.state.tool, walkFrame: null },
+      )
+
+      const png = encodePng(raster, 2, region)
+      fs.writeFileSync(path.join(OUT, `${shot.name}.png`), png)
+
+      const s = survey(raster, region)
+      // eslint-disable-next-line no-console
+      console.log(
+        `${shot.name}: ${png.length}b spread ${s.spread} colours ${s.colors} holes ${s.holes}`,
+      )
+
+      // A room is honestly flatter than a farm: two materials, one lamp and no weather,
+      // against fifteen crops under four seasons. Holding it to the farm's 64-colour bar
+      // would fail a correct render, so the bar here is 40 — still far above the dozen a
+      // single ramp can produce, which is what a genuinely failed room would show.
+      expect(s.spread).toBeGreaterThan(30)
+      expect(s.colors).toBeGreaterThan(40)
       expect(s.holes).toBe(0)
       expect(png.length).toBeGreaterThan(4000)
     }
