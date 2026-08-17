@@ -27,6 +27,7 @@ export type SceneId =
   | 'building'
   | 'machine'
   | 'stall'
+  | 'orders'
 
 /**
  * What a scene asks the shell to do after it has drawn. `newGame` and `loadGame`

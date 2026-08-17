@@ -45,8 +45,8 @@ import type { MaterialId } from '../game/farm-types'
 import type { ProductDef, ProductGroup, ProductShape } from '../game/products'
 import type { Quality } from '../game/types'
 import type { Ramp } from '../engine/palette'
-import { PAL, ramp } from '../engine/palette'
-import { dither, ellipse, hline, px, rect, shadeRect, vline } from '../engine/pixel'
+import { PAL, ramp, withAlpha } from '../engine/palette'
+import { dither, ellipse, hline, outline, px, rect, shadeRect, vline } from '../engine/pixel'
 import { mixHex } from './tiles'
 
 type Ctx = CanvasRenderingContext2D
@@ -2130,4 +2130,80 @@ export function drawMaterialIcon(
 ): void {
   const s = size >= ICON_LARGE ? ICON_LARGE : ICON
   MATERIAL_DRAW[id](ctx, Math.round(sx), Math.round(sy), s, MATERIAL_RAMP[id])
+}
+
+/* ------------------------------------------------------------------ *
+ * The land shelf
+ * ------------------------------------------------------------------ */
+
+/**
+ * A plot of the valley, seen from above: a fenced square of ground with a surveyor's peg
+ * in the corner. An owned plot is green and worked; one still the town's is pale scrub
+ * behind a closed gate, which is what the shop is selling.
+ */
+export function drawPlotIcon(ctx: Ctx, sx: number, sy: number, owned: boolean): void {
+  const x = Math.round(sx)
+  const y = Math.round(sy)
+  const ground = owned ? ramp(PAL.grass) : ramp(mixHex(PAL.grass, PAL.dusk, 0.55))
+  const post = ramp(PAL.bark)
+
+  // The ground, in perspective-free plan, with furrows once it is yours to work.
+  rect(ctx, x + 2, y + 5, ICON - 4, ICON - 10, ground.mid)
+  outline(ctx, x + 2, y + 5, ICON - 4, ICON - 10, PAL.ink)
+  hline(ctx, x + 3, y + 6, ICON - 6, ground.lit)
+  if (owned) {
+    for (let i = y + 9; i < y + ICON - 7; i += 3) {
+      hline(ctx, x + 4, i, ICON - 8, ground.dark)
+      hline(ctx, x + 4, i + 1, ICON - 8, ground.lit)
+    }
+  } else {
+    dither(ctx, x + 3, y + 6, ICON - 6, ICON - 12, ground.dark, 0)
+  }
+
+  // The fence: posts at the corners and a rail between them. A plot for sale is gated.
+  for (const px0 of [x + 2, x + ICON - 4]) {
+    rect(ctx, px0, y + 3, 2, ICON - 6, post.mid)
+    px(ctx, px0, y + 3, post.lit)
+  }
+  hline(ctx, x + 2, y + 5, ICON - 4, post.dark)
+  hline(ctx, x + 2, y + ICON - 7, ICON - 4, post.dark)
+
+  if (!owned) {
+    // The peg with the price on it, angled, so a locked plot reads as being for sale.
+    rect(ctx, x + ICON - 9, y + 1, 2, 8, post.lit)
+    rect(ctx, x + ICON - 13, y, 9, 5, PAL.parchment)
+    outline(ctx, x + ICON - 13, y, 9, 5, PAL.ink)
+    hline(ctx, x + ICON - 12, y + 2, 7, withAlpha(PAL.ink, 0.45))
+  }
+}
+
+/**
+ * A run of shelving, filled to `fill` (0..1). It is how full the store is *now*, so the
+ * icon carries the number the row is about rather than decorating it.
+ */
+export function drawShelfIcon(ctx: Ctx, sx: number, sy: number, fill: number): void {
+  const x = Math.round(sx)
+  const y = Math.round(sy)
+  const wood = ramp(PAL.bark)
+  const level = Math.max(0, Math.min(1, Number.isFinite(fill) ? fill : 0))
+
+  // Two uprights and three shelves between them.
+  rect(ctx, x + 2, y + 2, 3, ICON - 4, wood.dark)
+  rect(ctx, x + ICON - 5, y + 2, 3, ICON - 4, wood.mid)
+
+  const shelves = [y + 7, y + 13, y + 19]
+  // Filled from the bottom up, the way a store actually fills.
+  const filled = Math.round(level * shelves.length)
+  shelves.forEach((sYy, i) => {
+    rect(ctx, x + 2, sYy, ICON - 4, 2, wood.mid)
+    hline(ctx, x + 2, sYy, ICON - 4, wood.lit)
+    if (shelves.length - i > filled) return
+    // Crates on this shelf, two to a run, sitting on the board above it.
+    for (let cx0 = x + 4; cx0 + 6 <= x + ICON - 5; cx0 += 7) {
+      rect(ctx, cx0, sYy - 5, 6, 5, PAL.parchment)
+      outline(ctx, cx0, sYy - 5, 6, 5, PAL.ink)
+      hline(ctx, cx0 + 1, sYy - 3, 4, withAlpha(PAL.bark, 0.6))
+    }
+  })
+  outline(ctx, x + 2, y + 2, ICON - 4, ICON - 4, PAL.ink)
 }
