@@ -33,6 +33,11 @@ jobs:
 
       - run: npm ci
 
+      # First, and cheap: a bad packaging key would otherwise only surface after a
+      # full typecheck, test run and renderer build.
+      - name: Validate the electron-builder configuration
+        run: npm run check:build
+
       - name: Typecheck and test
         run: |
           npm run typecheck
@@ -63,8 +68,20 @@ jobs:
         id: collect
         shell: pwsh
         run: |
-          $src = "dist/squirrel-windows"
-          if (-not (Test-Path $src)) { throw "no $src directory - Squirrel packaging did not run" }
+          # electron-builder writes Squirrel output to <directories.output>/squirrel-windows.
+          # This project sets that to "release", not the default "dist", so read it from the
+          # manifest rather than hardcoding a path that is right for somebody else's repo.
+          $outDir = (Get-Content package.json -Raw | ConvertFrom-Json).build.directories.output
+          if (-not $outDir) { $outDir = "dist" }
+          $src = Join-Path $outDir "squirrel-windows"
+
+          if (-not (Test-Path $src)) {
+            "Expected $src. What electron-builder actually produced:"
+            Get-ChildItem $outDir -Recurse -File -ErrorAction SilentlyContinue |
+              ForEach-Object { "  " + $_.FullName.Replace((Get-Location).Path + [IO.Path]::DirectorySeparatorChar, "") }
+            throw "no $src directory - Squirrel packaging did not produce its output where expected"
+          }
+
           New-Item -ItemType Directory -Force staging | Out-Null
           Copy-Item "$src/*" staging -Recurse -Force
 
@@ -105,11 +122,23 @@ jobs:
           }
           $counts = (npm run count --silent) -join "`n"
 
+          # The code name comes from the public dim-sum catalogue, fetched now. If
+          # that catalogue cannot be read the script exits non-zero rather than
+          # inventing a dish, and the release simply carries no code name.
+          $dish = ""
+          try {
+            $dish = (npm run dish --silent) -join "`n"
+            if ($LASTEXITCODE -ne 0) { $dish = "" }
+          } catch { $dish = "" }
+          if ($dish) { $dish = "## Code name`n`n$dish`n" }
+
           $body = @"
           Sprout Hollow ${{ steps.v.outputs.tag }} for Windows.
 
           Built by GitHub Actions from ``$env:GITHUB_SHA`` on this run. Typecheck and the
           full test suite ran and passed in this same job before packaging.
+
+          $dish
 
           ## Install
 
@@ -157,6 +186,15 @@ jobs:
 
           if ($exists) {
             "Release $tag exists - updating it in place."
+
+            # The notes say "built from <sha>", so the tag has to agree. Without this
+            # the tag stays pinned to whichever commit first published this version
+            # while the artifacts and the notes move on, and the two quietly disagree
+            # about what was actually released.
+            gh api -X PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" `
+              -f sha="$env:GITHUB_SHA" -F force=true | Out-Null
+            "Moved tag $tag to $env:GITHUB_SHA"
+
             gh release edit $tag --notes-file release-notes.md --title "Sprout Hollow $tag" --draft=false --latest
             gh release upload $tag (Get-ChildItem staging -File | ForEach-Object { $_.FullName }) --clobber
           } else {
@@ -170,8 +208,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $json = gh release view "${{ steps.v.outputs.tag }}" --json isDraft,assets | ConvertFrom-Json
+          $tag = "${{ steps.v.outputs.tag }}"
+          $json = gh release view $tag --json isDraft,assets,tagName | ConvertFrom-Json
           if ($json.isDraft) { throw "the release is still a draft" }
+
+          # The notes claim this release was built from GITHUB_SHA; prove the tag agrees.
+          $tagged = gh api "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" --jq .object.sha
+          if ($tagged -ne $env:GITHUB_SHA) {
+            throw "tag $tag points at $tagged but this release was built from $env:GITHUB_SHA"
+          }
+          "Tag $tag correctly points at $tagged"
           $names = $json.assets.name
           "Published assets: $($names -join ', ')"
           foreach ($required in @('.exe', '.nupkg', 'RELEASES')) {
