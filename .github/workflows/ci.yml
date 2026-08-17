@@ -78,40 +78,6 @@ jobs:
           path: docs/shots/*.png
           if-no-files-found: error
 
-  package:
-    name: Package the Windows installer
-    # Only on the default branch and on demand: this pulls the real Electron binary
-    # and runs electron-builder, which is far slower than the checks above.
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    needs: check
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - run: npm ci
-
-      - name: Build the installer
-        run: npm run package
-        env:
-          # Code signing is deliberately not configured; stop electron-builder
-          # hunting for a certificate and failing on its absence.
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-
-      - name: Check the installer exists and is not a stub
-        shell: pwsh
-        run: |
-          $exe = Get-ChildItem release/*.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $exe) { throw "electron-builder produced no .exe in release/" }
-          if ($exe.Length -lt 40MB) { throw "installer is only $($exe.Length) bytes - that is not a real build" }
-          "Built $($exe.Name), $([math]::Round($exe.Length / 1MB, 1)) MB"
-
-      - name: Upload the installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: sprout-hollow-setup
-          path: release/*.exe
-          if-no-files-found: error
-          retention-days: 14
+  # Packaging and publishing live in release.yml, which runs on every push to main.
+  # Keeping them there means there is exactly one place that can produce a release,
+  # so two workflows can never race to publish the same tag.

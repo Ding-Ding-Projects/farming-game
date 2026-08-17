@@ -1,75 +1,181 @@
 name: Release
 
-# Tag a version to cut a release:  git tag v1.0.0 && git push origin v1.0.0
-# Builds the desktop application on all three platforms and attaches the
-# installers to a GitHub release, which is what the landing page links to.
+# Three ways in, one behaviour:
+#   - push to main      CI that does not produce a downloadable build is not much use
+#   - workflow_dispatch one click, no inputs required
+#   - a v* tag          the explicit, versioned route
+#
+# Windows only, Squirrel.Windows, and permanently unsigned. The notes say so.
 
 on:
   push:
+    branches: [main]
     tags: ['v*']
   workflow_dispatch:
-    inputs:
-      tag:
-        description: Tag to build and publish
-        required: true
 
 permissions:
   contents: write
 
-env:
-  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  draft:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Create the draft release if it does not exist
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists, reusing it."
-          else
-            gh release create "$TAG" \
-              --draft \
-              --title "Sprout Hollow $TAG" \
-              --notes "Windows installer. It is not code-signed, so SmartScreen will warn on first run."
-          fi
-
-  # Sprout Hollow is a Windows application. There is deliberately no macOS or
-  # Linux build: shipping a target nobody tests is worse than not shipping it.
-  build:
-    needs: draft
+  release:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22'
           cache: npm
 
       - run: npm ci
 
-      - name: Build the desktop application
+      - name: Typecheck and test
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Resolve the version and tag
+        id: v
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ("${{ github.ref_type }}" -eq "tag") { $tag = "${{ github.ref_name }}" }
+          else { $tag = "v$version" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag"         >> $env:GITHUB_OUTPUT
+          "Releasing $tag from $env:GITHUB_SHA"
+
+      - name: Build the Squirrel.Windows package
         run: npm run package
         env:
-          # electron-builder would otherwise try to discover a signing identity.
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # Code signing is permanently prohibited for this project. Stop
+          # electron-builder discovering a certificate and using it.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
-      - name: Attach the installer to the release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$TAG" release/*.exe --clobber
+      # electron-builder writes the setup executable, RELEASES and the .nupkg files
+      # under dist/squirrel-windows/, NOT the dist/ root. A collector that looks at
+      # the root reports a missing setup even though packaging succeeded.
+      - name: Collect the artifacts
+        id: collect
+        shell: pwsh
+        run: |
+          $src = "dist/squirrel-windows"
+          if (-not (Test-Path $src)) { throw "no $src directory - Squirrel packaging did not run" }
+          New-Item -ItemType Directory -Force staging | Out-Null
+          Copy-Item "$src/*" staging -Recurse -Force
 
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+          $files = Get-ChildItem staging -File
+          if (-not $files) { throw "staging is empty" }
+          "Collected $($files.Count) files:"
+          $files | ForEach-Object { "  {0,-52} {1:N0} bytes" -f $_.Name, $_.Length }
+
+          $setup = $files | Where-Object { $_.Extension -eq ".exe" }
+          if (-not $setup) { throw "no Setup .exe was produced" }
+          $nupkg = $files | Where-Object { $_.Extension -eq ".nupkg" }
+          if (-not $nupkg) { throw "no .nupkg was produced - Squirrel update assets are required" }
+          if (-not (Test-Path staging/RELEASES)) { throw "no RELEASES file - Squirrel update feed is incomplete" }
+          if (($setup | Measure-Object -Property Length -Sum).Sum -lt 40MB) {
+            throw "the setup executable is implausibly small; this is not a real build"
+          }
+
+      # The release contract requires this assertion, not an assumption: every setup
+      # executable must actually report NotSigned before anything is published.
+      - name: Assert every executable is unsigned
+        shell: pwsh
+        run: |
+          $bad = @()
+          foreach ($exe in Get-ChildItem staging -Filter *.exe) {
+            $status = (Get-AuthenticodeSignature $exe.FullName).Status
+            "{0,-52} {1}" -f $exe.Name, $status
+            if ($status -ne "NotSigned") { $bad += "$($exe.Name) reports $status" }
+          }
+          if ($bad) { throw "expected every artifact to be unsigned: $($bad -join '; ')" }
+
+      - name: Hash the artifacts and count the lines
+        id: notes
+        shell: pwsh
+        run: |
+          $hashes = Get-ChildItem staging -File | ForEach-Object {
+            $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "| ``$($_.Name)`` | {0:N0} | ``$h`` |" -f $_.Length
+          }
+          $counts = (npm run count --silent) -join "`n"
+
+          $body = @"
+          Sprout Hollow ${{ steps.v.outputs.tag }} for Windows.
+
+          Built by GitHub Actions from ``$env:GITHUB_SHA`` on this run. Typecheck and the
+          full test suite ran and passed in this same job before packaging.
+
+          ## Install
+
+          Download and run ``Sprout Hollow-Setup-${{ steps.v.outputs.version }}.exe``.
+
+          **These artifacts are not code-signed.** Windows will show an unknown-publisher
+          or SmartScreen warning the first time you run the installer. That warning is
+          accurate: nothing here carries a signature and no authenticity or signature
+          verification is claimed. Every build is produced in public from the source in
+          this repository, and the hashes below are the ones this run generated. If you
+          would rather not trust an unsigned binary, build it yourself with ``npm run package``.
+
+          ## Update assets
+
+          Squirrel.Windows: the ``RELEASES`` feed, the full ``.nupkg`` and any generated
+          delta packages are attached alongside the installer.
+
+          ## Artifacts
+
+          | File | Bytes | SHA-256 |
+          |---|---:|---|
+          $($hashes -join "`n")
+
+          ## Size of the tree at this commit
+
+          Produced by ``npm run count`` over this exact commit, in this run.
+
+          $counts
+          "@
+
+          $body | Set-Content release-notes.md -Encoding utf8
+          "Wrote release-notes.md ($($body.Length) chars)"
+
+      # One release per version. If the tag already carries a release, its assets and
+      # notes are replaced rather than a second, duplicate release being created.
       - name: Publish the release
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "$TAG" --draft=false --latest
+        run: |
+          $tag = "${{ steps.v.outputs.tag }}"
+          $exists = $false
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) { $exists = $true }
+
+          if ($exists) {
+            "Release $tag exists - updating it in place."
+            gh release edit $tag --notes-file release-notes.md --title "Sprout Hollow $tag" --draft=false --latest
+            gh release upload $tag (Get-ChildItem staging -File | ForEach-Object { $_.FullName }) --clobber
+          } else {
+            "Creating release $tag."
+            gh release create $tag (Get-ChildItem staging -File | ForEach-Object { $_.FullName }) `
+              --title "Sprout Hollow $tag" --notes-file release-notes.md --latest
+          }
+
+      - name: Confirm the release is downloadable
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $json = gh release view "${{ steps.v.outputs.tag }}" --json isDraft,assets | ConvertFrom-Json
+          if ($json.isDraft) { throw "the release is still a draft" }
+          $names = $json.assets.name
+          "Published assets: $($names -join ', ')"
+          foreach ($required in @('.exe', '.nupkg', 'RELEASES')) {
+            if (-not ($names | Where-Object { $_ -like "*$required*" })) {
+              throw "the published release is missing $required"
+            }
+          }

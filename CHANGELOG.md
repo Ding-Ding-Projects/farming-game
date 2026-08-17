@@ -125,5 +125,5 @@ The first release. A complete farming game, and the desktop application that con
 - 168 unit tests over the rules layer, and a type-check across the renderer and the Electron
   main process, both run in continuous integration.
 
-[Unreleased]: https://github.com/DingDingChae/sprout-hollow/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/DingDingChae/sprout-hollow/releases/tag/v1.0.0
+[Unreleased]: https://github.com/Ding-Ding-Projects/farming-game/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Ding-Ding-Projects/farming-game/releases/tag/v1.0.0

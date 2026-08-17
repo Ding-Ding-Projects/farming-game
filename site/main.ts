@@ -9,7 +9,7 @@
 import { drawText, textWidth, FONT_H } from '../src/engine/font'
 import { PAL } from '../src/engine/palette'
 
-const REPO = 'DingDingChae/sprout-hollow'
+const REPO = 'Ding-Ding-Projects/farming-game'
 
 /* ---------------------------------------------------------------- wordmark */
 
