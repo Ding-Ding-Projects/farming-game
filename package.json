@@ -41,14 +41,15 @@
     "win": {
       "target": [
         "squirrel"
-      ]
+      ],
+      "signAndEditExecutable": false,
+      "signDlls": false,
+      "verifyUpdateCodeSignature": false
     },
     "squirrelWindows": {
       "artifactName": "${productName}-Setup-${version}.${ext}",
       "msi": false
     },
-    "forceCodeSigning": false,
-    "signExecutable": false,
-    "signAndEditExecutable": false
+    "forceCodeSigning": false
   }
 }
