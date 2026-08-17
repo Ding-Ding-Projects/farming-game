@@ -81,6 +81,8 @@ import { createChangelogPanel } from './ui/changelog'
 import { createSurprisePanel, installSurprise } from './ui/surprise'
 import { createSearchField } from './ui/searchfield'
 import type { SearchField } from './ui/searchfield'
+import { createLedgerPanel } from './ui/ledger'
+import type { LedgerPanel } from './ui/ledger'
 import { createFarmTab } from './ui/farmtab'
 import type { FarmTab } from './ui/farmtab'
 
@@ -119,6 +121,7 @@ const PANEL_KINDS = [
   'changelog',
   'history',
   'surprise',
+  'ledger',
   'tabs',
 ] as const
 
@@ -131,6 +134,7 @@ const TAB_TITLE: Readonly<Record<PanelKind, StringKey>> = {
   changelog: 'tab.changelog',
   history: 'tab.history',
   surprise: 'tab.surprise',
+  ledger: 'tab.ledger',
   tabs: 'tabs.new',
 }
 
@@ -609,6 +613,7 @@ async function boot(root: HTMLElement): Promise<Shell> {
   /* 5. the panels */
   const panels = new Map<string, PanelHandle>()
   let farm: FarmTab | null = null
+  let ledger: LedgerPanel | null = null
 
   const activateTab = (tabId: string): void => {
     model.activate(tabId)
@@ -638,6 +643,25 @@ async function boot(root: HTMLElement): Promise<Shell> {
       case 'surprise': {
         const panel = createSurprisePanel()
         return { element: panel.el, destroy: () => panel.destroy() }
+      }
+      case 'ledger': {
+        // The Ledger reads the running farm and hands a repayment straight back to it, so
+        // the panel, the frame loop and the save can never disagree about the money.
+        const panel = createLedgerPanel({
+          state: () => farm?.state() ?? null,
+          commit: (result) => {
+            farm?.apply(result.state)
+            ledger?.refresh()
+          },
+        })
+        ledger = panel
+        return {
+          element: panel.el,
+          destroy: () => {
+            if (ledger === panel) ledger = null
+            panel.destroy()
+          },
+        }
       }
       case 'tabs': {
         const surface = createTabSearchPanel(DEFAULT_STRIP_ID)
@@ -836,15 +860,15 @@ function registerShellCommands(ctx: CommandContext): Array<() => void> {
       ctx.focusFarm()
     },
   })
-  for (const kind of ['settings', 'almanac', 'changelog', 'history'] as const) {
-    const titleKey: StringKey =
-      kind === 'settings'
-        ? 'cmd.openSettings'
-        : kind === 'almanac'
-          ? 'cmd.openAlmanac'
-          : kind === 'changelog'
-            ? 'cmd.openChangelog'
-            : 'cmd.openHistory'
+  const OPEN_COMMANDS: Readonly<Record<string, StringKey>> = {
+    settings: 'cmd.openSettings',
+    almanac: 'cmd.openAlmanac',
+    changelog: 'cmd.openChangelog',
+    history: 'cmd.openHistory',
+    ledger: 'cmd.openLedger',
+  }
+  for (const kind of ['settings', 'almanac', 'changelog', 'history', 'ledger'] as const) {
+    const titleKey: StringKey = OPEN_COMMANDS[kind]
     add({
       id: `shell.open.${kind}`,
       titleKey,

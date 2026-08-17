@@ -1,4 +1,5 @@
 import type { DayReport, GameState, Weather } from '../../game/types'
+import type { MarketEvent } from '../../game/farm-types'
 import type { Scene, SceneCommand, SceneContext } from '../scene'
 import { LOGICAL_H, LOGICAL_W } from '../../game/constants'
 import { sleep } from '../../game/actions'
@@ -58,6 +59,22 @@ function forecastLine(weather: Weather): string {
   }
 }
 
+/** The week's market event, announced on the morning it starts. `docs/ECONOMY.md` §3. */
+function eventLine(event: MarketEvent): string {
+  switch (event.kind) {
+    case 'bumper':
+      return 'WORD FROM TOWN: A BUMPER HARVEST HAS THE PRICE ON THE FLOOR.'
+    case 'shortage':
+      return 'WORD FROM TOWN: A SHORTAGE. SOMETHING IS FETCHING WELL OVER LIST.'
+    case 'festival':
+      return 'WORD FROM TOWN: A FESTIVAL. A WHOLE SHELF IS IN DEMAND THIS WEEK.'
+    case 'caravan':
+      return 'A TRADE CARAVAN IS IN. EVERY PRICE IS UP, AND THEY BROUGHT RARE SEED.'
+    case 'quiet':
+      return 'THE MARKET IS QUIET THIS WEEK.'
+  }
+}
+
 function compose(state: GameState, report: DayReport): Entry[] {
   const out: Entry[] = []
   const add = (text: string, color = PAL.ink, gap = false): void => {
@@ -84,6 +101,61 @@ function compose(state: GameState, report: DayReport): Entry[] {
   }
   if (report.withered > 0) {
     add(`${report.withered} WITHERED FOR WANT OF WATER.`, PAL.berry)
+  }
+
+  // The barnyard, the workshop and the stall, in the order the night ran them. A report
+  // that hides a starving cow is worse than no report at all — docs/GAMEPLAY.md §5.
+  if (report.fed > 0 || report.unfed > 0) {
+    add(`${report.fed} ANIMALS ATE THEIR FILL.`, PAL.leaf, true)
+  }
+  if (report.unfed > 0) {
+    add(
+      report.unfed === 1
+        ? 'ONE WENT HUNGRY AND IS OUT OF SORTS WITH YOU.'
+        : `${report.unfed} WENT HUNGRY AND ARE OUT OF SORTS WITH YOU.`,
+      PAL.berry,
+    )
+  }
+  if (report.animalsUnwell > 0) {
+    add(`${report.animalsUnwell} ARE UNWELL. FEED AND PET THEM TODAY.`, PAL.berry)
+  }
+  if (report.produced > 0) {
+    add(`${report.produced} HAVE SOMETHING WAITING TO BE COLLECTED.`, PAL.leaf)
+  }
+
+  if (report.machinesFinished > 0) {
+    add(`${report.machinesFinished} MACHINE JOBS CAME OFF THE LINE.`, PAL.leaf, true)
+  }
+  if (report.machinesBlocked > 0) {
+    add(
+      `${report.machinesBlocked} JOBS ARE HELD IN THEIR MACHINES - THE BARN IS FULL.`,
+      PAL.berry,
+    )
+  }
+
+  if (report.stallSold > 0) {
+    add(`THE STALL SOLD ${report.stallSold} FOR ${report.stallEarned}G.`, PAL.lantern, true)
+  }
+  if (report.ordersFailed > 0) {
+    add(`${report.ordersFailed} ACCEPTED ORDERS WENT PAST THEIR DATE.`, PAL.berry)
+  }
+  if (report.eventBegan !== null) {
+    add(eventLine(report.eventBegan), PAL.lantern, true)
+  }
+  for (const level of report.leveled) {
+    add(`YOU REACHED LEVEL ${level}.`, PAL.lantern)
+  }
+
+  if (report.interestAccrued > 0) {
+    add(`${report.interestAccrued}G OF INTEREST WENT ON WHAT YOU OWE.`, PAL.berry, true)
+  }
+  if (report.tax !== null) {
+    const t = report.tax
+    add(
+      `THE SEASON CLOSED: ${t.gross}G IN, ${t.expenses}G OUT, ${Math.round(t.rate * 100)}% OF ${t.taxable}G IS ${t.due}G DUE.`,
+      PAL.ink,
+      true,
+    )
   }
 
   if (report.seasonChanged) {

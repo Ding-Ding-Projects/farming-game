@@ -1,5 +1,7 @@
 import type { ActionResult, GameState, GoodId, ItemRef, SoundId } from './types'
 import { cropById, cropsForSeason, produceValue, totalGrowDays } from './crops'
+import { productById, productValue } from './products'
+import { spaceCheck } from './storage'
 import { addItem, cloneState, countItem, itemKey, itemName, removeItem } from './state'
 
 export interface ShopEntry {
@@ -87,6 +89,17 @@ export function sellValue(item: ItemRef): number {
       const price = GOOD_PRICE[item.goodId]
       return typeof price === 'number' ? buyBack(price) : 0
     }
+    case 'product': {
+      // The general store buys artisan goods over the counter at the catalogue's own base
+      // price, quality included. It is the plain, unmoving alternative to the five channels
+      // in `market.ts` — the shopkeeper never haggles and never floods.
+      const product = productById(item.productId)
+      return product === undefined ? 0 : productValue(product, item.quality)
+    }
+    case 'material':
+      // Wood, planks, deeds. Materials are never bought and never sold, per
+      // `docs/PROGRESSION.md` §2 — they are earned by clearing and spent on building.
+      return 0
   }
 }
 
@@ -107,6 +120,11 @@ export function buy(state: GameState, item: ItemRef, qty: number): ActionResult 
   if (state.gold < cost) {
     return fail(state, `NEEDS ${cost}G, YOU HAVE ${state.gold}G`)
   }
+
+  // The shelf is checked before the purse, so the player is never charged for goods that
+  // would have nowhere to go. `addItem` clamps to the cap; this is what makes it say so.
+  const room = spaceCheck(state, entry.item, n)
+  if (!room.ok) return fail(state, room.message)
 
   const next = addItem(cloneState(state), entry.item, n)
   next.gold = state.gold - cost

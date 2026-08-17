@@ -12,6 +12,118 @@ build time, so what you see in the app is what is in the repository.
 
 Nothing yet. The next change lands here.
 
+## [1.1.0] - 2026-08-16
+
+The farm becomes a business. Animals, buildings, factories, a market that moves, and a
+hundred levels of things to reach for. Version 1.0 saves load straight into it.
+
+### Added
+
+#### Land, animals and buildings
+
+- The valley is divided into eight **regions**. You start owning the home meadow only;
+  the rest is bought with gold **and** a land deed, and until you own it you cannot clear
+  it. Deeds come from level rewards and boat crates, so land is the one thing gold alone
+  never finishes.
+- **Clearing now pays.** Every rock, log and patch of weeds yields materials — wood,
+  stone, fibre, and occasionally a plank, nail, screw, bolt or duct tape — and three
+  experience. Twelve materials in all, and none of them is ever bought or sold.
+- **Twenty buildings**, placed anywhere you have cleared, with a per-tile ghost that tints
+  each square of the footprint so you can see which corner is the problem before you
+  commit. Nothing is spent until the build succeeds. Buildings can be moved for a small
+  fee, and pulled down — the animals inside ride along, or are rehoused, or are sold at
+  half price, and the plan tells you which before it happens.
+- **Twelve species of animal**, each housed in the buildings that will take it. They eat
+  from the silo or graze where the season allows, gain and lose friendship, fall ill if
+  neglected or left out overnight, and produce on their own clock. Friendship drives both
+  how much they give and how good it is.
+- Hay: cut grass into the silo through autumn, feed it through winter.
+
+#### Factories and the chains
+
+- **Thirty factories** and **195 recipes** turning raw goods into **213 products**.
+  Machines stand on one tile, hold a visible queue, and work through it overnight.
+- **Quality carries the whole way down a chain.** A gold wheat makes gold flour makes gold
+  bread, and the price multiplies at every step. A batch is graded by its best ingredient,
+  and exactly one unit of that grade is taken to set the mark — the rest of your gold
+  stays yours to sell.
+- Chains run three deep on purpose: wheat to flour to bread, milk to cream to cheese, wool
+  to cloth to fabric.
+- A job that finishes into a full barn is **held in the machine** and reported in the
+  morning, never destroyed.
+
+#### The economy
+
+- Prices move. Every sellable good carries a live supply index: selling floods it, and it
+  decays back toward neutral each day at its own rate. Staples barely shift; wine, truffle
+  and cheese swing hard.
+- A per-good, per-season demand multiplier, and **one market event a week** — bumper
+  harvest, shortage, festival, trade caravan, or a quiet week — rolled from the seed and
+  announced in the morning report the day it starts.
+- **Five ways to sell**: the shipping bin at the closing price, the town market at ten per
+  cent more for an hour's walk, the roadside stall where you name the price and the town
+  decides how fast it moves, delivery orders at an agreed premium, and boat crates for
+  several goods at once.
+- **Reputation**, 0 to 1000, starting at 250: it gates the order tiers, scales every sale
+  between 0.95x and 1.08x, and is shown as a named rank with the number beside it.
+- **Loans and tax.** Borrow against your standing and your farm, pay interest at the end
+  of each season, and pay a flat levy on the season's net earnings — itemised as gross,
+  expenses, taxable, rate and amount due. Nothing is repossessed and nothing ends the run.
+
+#### Levels, storage and the ladder
+
+- **A hundred levels**, each one opening something real — 161 rungs in all across crops,
+  trees, animals, buildings, factories, recipes, regions, storage and selling channels.
+  Experience is paid for doing: harvesting, collecting, finishing a machine job, filling an
+  order, clearing land, raising a building.
+- **Two capped stores.** The silo holds crops and seeds and starts at 150; the barn store
+  holds animal produce, artisan goods, purchased supplies and bulk materials and starts at
+  200. Both extend twenty times, for gold and for materials that cannot be bought.
+- **A full store never eats your work.** A harvest the silo cannot take is refused and the
+  crop keeps standing. A purchase with no shelf for it is refused before you are charged.
+  A machine holds what will not fit. The stall will not be pulled down with stock still on
+  it. Every refusal names the store, the shortfall and what to do about it.
+- **Thirty-three crops** (up from fifteen) and **fourteen fruit trees**, spanning all four
+  seasons.
+
+#### The morning report
+
+- The overnight pass now runs, in this order: the weather falls and crops grow; animals
+  eat, lose friendship if they went hungry, tick their produce clocks and come in from the
+  field; machines work their queues; the stall sells; on the last night of a season
+  interest accrues and the levy is assessed; the calendar turns; the market heals, the
+  week's event is rolled, orders expire and are topped back up, and the day's closing
+  prices go into the ledger.
+- The report counts what each pass actually did — animals fed and unfed, animals unwell,
+  produce waiting, machine jobs finished and blocked, stall units and gold, orders failed,
+  the event that began, interest, the season's levy and every level crossed.
+
+#### The Ledger
+
+- A new shell tab: price history as a chart, income and expenses by source and season,
+  orders available and accepted, loans with a repay control, and reputation. Every table
+  has its own search field with its own anchored regex builder and its own catalogue row,
+  and the whole ledger exports as JSON, CSV or Markdown.
+
+### Changed
+
+- `GameState` gains `buildings`, `animals`, `machines`, `hay`, `progression`, `market`,
+  `orders`, `loans` and `stall`. `Tile` gains `buildingId` and `machineId`, mirrored from
+  the authoritative lists after every verb, so occupancy is answerable per tile.
+- `ItemRef` gains a `product` variant that carries quality through the factory chains and a
+  `material` variant that never carries one. Keying, naming, pricing, storage routing,
+  saving, the inventory screen, the shop screen and the Ledger all handle both.
+- `addItem` consults the store cap itself, so no route into the bag can overflow a shelf.
+- Harvesting now pays experience, and a harvest is all-or-nothing against the silo.
+- The general store buys artisan products over the counter at the catalogue price. It does
+  not trade materials.
+
+### Fixed
+
+- A save written by 1.0 loads: every new field arrives at its documented default — level
+  one, the home meadow owned, a neutral market, no debt — and a single bad row inside a
+  new collection is dropped rather than failing the whole file.
+
 ## [1.0.0] - 2026-08-16
 
 The first release. A complete farming game, and the desktop application that contains it.

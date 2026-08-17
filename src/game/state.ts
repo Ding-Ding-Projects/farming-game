@@ -6,8 +6,22 @@ import {
   START_ENERGY,
   START_GOLD,
 } from './constants'
-import { CROPS, cropById } from './crops'
+import { CROPS } from './crops'
+import { createMarket } from './economy'
+import { cloneItem, itemKey } from './items'
 import { rngFor } from './rng'
+import { createProgression, fitCount } from './storage'
+import type {
+  Animal,
+  Building,
+  Loan,
+  Machine,
+  MachineJob,
+  Market,
+  Order,
+  Progression,
+  StallSlot,
+} from './farm-types'
 import type {
   CropDef,
   Facing,
@@ -19,6 +33,9 @@ import type {
   Tile,
   Weather,
 } from './types'
+
+/** The `ItemRef` vocabulary lives in `items.ts`; every caller still reaches it through here. */
+export { cloneItem, itemKey, itemName } from './items'
 
 /**
  * The farmhouse footprint, in tiles: two rows of building plus the doorstep row its
@@ -68,6 +85,8 @@ function blankTile(variant: number): Tile {
     sprinkler: false,
     plant: null,
     variant,
+    buildingId: null,
+    machineId: null,
   }
 }
 
@@ -97,48 +116,6 @@ export function isWalkable(tile: Tile): boolean {
   return !BLOCKING.has(tile.ground)
 }
 
-export function itemKey(item: ItemRef): string {
-  switch (item.kind) {
-    case 'seed':
-      return `seed:${item.cropId}`
-    case 'produce':
-      return `produce:${item.cropId}:${item.quality}`
-    case 'good':
-      return `good:${item.goodId}`
-  }
-}
-
-function cropLabel(cropId: string): string {
-  const crop = cropById(cropId)
-  return (crop ? crop.name : cropId).toUpperCase()
-}
-
-export function itemName(item: ItemRef): string {
-  switch (item.kind) {
-    case 'seed':
-      return `${cropLabel(item.cropId)} SEEDS`
-    case 'produce': {
-      const label = cropLabel(item.cropId)
-      if (item.quality === 'silver') return `SILVER ${label}`
-      if (item.quality === 'gold') return `GOLD ${label}`
-      return label
-    }
-    case 'good':
-      return item.goodId.toUpperCase()
-  }
-}
-
-function cloneItem(item: ItemRef): ItemRef {
-  switch (item.kind) {
-    case 'seed':
-      return { kind: 'seed', cropId: item.cropId }
-    case 'produce':
-      return { kind: 'produce', cropId: item.cropId, quality: item.quality }
-    case 'good':
-      return { kind: 'good', goodId: item.goodId }
-  }
-}
-
 function clonePlant(plant: Plant | null): Plant | null {
   if (plant === null) return null
   return {
@@ -160,7 +137,86 @@ function cloneTile(tile: Tile): Tile {
     sprinkler: tile.sprinkler,
     plant: clonePlant(tile.plant),
     variant: tile.variant,
+    buildingId: tile.buildingId,
+    machineId: tile.machineId,
   }
+}
+
+/* ------------------------------------------------- the wave-three collections */
+
+function cloneBuilding(building: Building): Building {
+  return { id: building.id, kind: building.kind, x: building.x, y: building.y }
+}
+
+function cloneAnimal(animal: Animal): Animal {
+  return { ...animal }
+}
+
+function cloneJob(job: MachineJob): MachineJob {
+  return { recipeId: job.recipeId, quality: job.quality, hoursLeft: job.hoursLeft }
+}
+
+function cloneMachine(machine: Machine): Machine {
+  return {
+    id: machine.id,
+    kind: machine.kind,
+    index: machine.index,
+    queue: machine.queue.map(cloneJob),
+    ready: machine.ready.map((held) => ({ item: cloneItem(held.item), count: held.count })),
+  }
+}
+
+export function cloneProgressionBlock(progression: Progression): Progression {
+  return {
+    level: progression.level,
+    xp: progression.xp,
+    unlockedRegions: progression.unlockedRegions.slice(),
+    materials: { ...progression.materials },
+    siloCap: progression.siloCap,
+    barnCap: progression.barnCap,
+  }
+}
+
+/**
+ * The market, including the assessor's opening figures for the season being taxed. Those
+ * figures are optional on `Market` — a save written before the first season closed has none —
+ * so they are copied only when they are there.
+ */
+function cloneMarket(market: Market): Market {
+  const copy: Market = {
+    supply: { ...market.supply },
+    event: market.event === null ? null : { ...market.event },
+    eventWeek: market.eventWeek,
+    reputation: market.reputation,
+    history: market.history.map((point) => ({ day: point.day, prices: { ...point.prices } })),
+  }
+  if (market.ledger !== undefined) copy.ledger = { ...market.ledger }
+  return copy
+}
+
+function cloneOrder(order: Order): Order {
+  return {
+    ...order,
+    lines: order.lines.map((line) => ({
+      item: cloneItem(line.item),
+      count: line.count,
+      minQuality: line.minQuality,
+    })),
+    materialReward: { ...order.materialReward },
+  }
+}
+
+function cloneSlot(slot: StallSlot): StallSlot {
+  return {
+    item: slot.item === null ? null : cloneItem(slot.item),
+    count: slot.count,
+    price: slot.price,
+    sold: slot.sold,
+  }
+}
+
+function cloneLoan(loan: Loan): Loan {
+  return { ...loan }
 }
 
 export function cloneState(state: GameState): GameState {
@@ -194,6 +250,15 @@ export function cloneState(state: GameState): GameState {
       withered: state.stats.withered,
     },
     passedOut: state.passedOut,
+    buildings: state.buildings.map(cloneBuilding),
+    animals: state.animals.map(cloneAnimal),
+    machines: state.machines.map(cloneMachine),
+    hay: state.hay,
+    progression: cloneProgressionBlock(state.progression),
+    market: cloneMarket(state.market),
+    orders: state.orders.map(cloneOrder),
+    loans: state.loans.map(cloneLoan),
+    stall: state.stall.map(cloneSlot),
   }
 }
 
@@ -205,13 +270,27 @@ export function countItem(state: GameState, item: ItemRef): number {
   return 0
 }
 
+/**
+ * Puts goods in the bag, **against the store's cap**.
+ *
+ * `docs/PROGRESSION.md` §5 makes the cap `addItem`'s business rather than each caller's, so
+ * that no route into the bag can quietly overflow a store. What will not fit is *not* added
+ * and is *not* destroyed: it stays wherever it was — on the plant, in the machine, on the
+ * stall — because the caller has to ask first.
+ *
+ * Callers that need to tell the player what happened use `progression.depositItem`, which
+ * wraps this with the count that fit, the count refused and the sentence naming the store.
+ * Anything that adds without asking gets the same clamp and simply adds less.
+ */
 export function addItem(state: GameState, item: ItemRef, count: number): GameState {
   const next = cloneState(state)
   if (count <= 0) return next
+  const room = fitCount(state, item, count)
+  if (room <= 0) return next
   const key = itemKey(item)
   const existing = next.inventory.find((entry) => itemKey(entry.item) === key)
-  if (existing) existing.count += count
-  else next.inventory.push({ item: cloneItem(item), count })
+  if (existing) existing.count += room
+  else next.inventory.push({ item: cloneItem(item), count: room })
   return next
 }
 
@@ -387,5 +466,17 @@ export function createState(seed: number): GameState {
       withered: 0,
     },
     passedOut: false,
+
+    // ---- wave 3. A farm on day one owns nothing but its front garden: no buildings, no
+    // animals, no machines, no debt, and a stall with no slots until one is raised.
+    buildings: [],
+    animals: [],
+    machines: [],
+    hay: 0,
+    progression: createProgression(),
+    market: createMarket(),
+    orders: [],
+    loans: [],
+    stall: [],
   }
 }

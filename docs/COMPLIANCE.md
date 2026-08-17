@@ -17,18 +17,27 @@ restatement of them is `docs/SHELL-CONTRACT.md`; the game's design language is `
 
 ## How this was checked
 
+Re-run at the close of wave three (livestock, factories, the economy and the ladder).
+
 | Command | Result |
 | --- | --- |
 | `npm run typecheck` | passes, no output (`tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit`) |
-| `npm test` | 15 files, **449 passed**, 0 failed, 0 skipped |
+| `npm test` | 27 files, **866 passed**, 0 failed, 0 skipped |
 | `npm run build:main` | passes |
 | `npm run build:renderer` | passes (one Rollup chunk-size advisory, not an error) |
 | `npm run build:site` | passes |
 
-The seven original game test files still pass unchanged and still contain 168 tests:
-`crops` 18, `rng` 17, `shop` 20, `state` 23, `actions` 60, `time` 15, `save` 15. No test
-was deleted, skipped or weakened; two files were added (`tests/search-catalogue.test.ts`
-was already present and is now green, `tests/site-palette.test.ts` is new).
+The seven original game test files still pass **unchanged** and still contain 168 tests:
+`crops` 18, `rng` 17, `shop` 20, `state` 23, `actions` 60, `time` 15, `save` 15. The
+fifteen files that made up the 449 of wave two — those seven plus `history`, `i18n`,
+`regex`, `search-catalogue`, `site-palette`, `store`, `tabmodel`, `tokens` — still pass as
+a set, 449 of 449, and **not one of them was edited by this wave**: `git diff -- tests/`
+reports nothing. No test anywhere was deleted, skipped or weakened.
+
+The twelve files wave three added carry 417 further tests: `buildings` 23, `economy` 49,
+`factories` 34, `livestock` 40, `market` 54, `placement` 35, `production` 34, `progression`
+37, `species` 17, `trees` 26, `unlocks` 36, and `integration` 32. The last of those is new
+in this pass and tests the seams rather than a module — see "Wave three" below.
 
 The built application was also started for real in Electron on an off-screen desktop. It
 booted, set its window title through `t()` to `Farm — Sprout Hollow`, and called
@@ -435,17 +444,19 @@ than as English. `tests/search-catalogue.test.ts` reads the ids straight out of 
 and fails in both directions — a field with no row, and a row with no field. It also checks
 that every `*Key` in a row is a real key in `STRINGS`.
 
-The fourteen catalogued fields: `tabs.strip`, `tabs.overflow`, `tabs.group` (a prefix; the
+The nineteen catalogued fields: `tabs.strip`, `tabs.overflow`, `tabs.group` (a prefix; the
 real ids are `tabs.group.<groupId>`, one per group), `tabs.groupNames`, `tabs.all`,
 `tabs.bulkClose`, `palette`, `history`, `settings`, `almanac.search`, `changelog.search`,
-`appearance.colorpicker.swatches`, `appearance.editor.properties`, `appearance.menu.items`.
+`appearance.colorpicker.swatches`, `appearance.editor.properties`, `appearance.menu.items`,
+and the Ledger's five — `ledger.prices`, `ledger.income`, `ledger.orders`, `ledger.loans`,
+`ledger.reputation`, one per section, no two sharing a builder.
 
 ## 2.8 A builder on every listed surface — Partial
 
 > "Give every settings, preferences, properties, appearance, documentation, history,
 > changelog, list, table, menu, picker, and tab-discovery surface its own builder."
 
-Every one of the fourteen fields above has a builder. Two surfaces still have none:
+Every one of the nineteen fields above has a builder. Two surfaces still have none:
 
 - **The colour picker's swatch strip** uses the shared field, so it has one.
 - **The tab strip's group list and the notification stack** are not searchable, and are not
@@ -492,6 +503,107 @@ act on.
    Read in the source; not exercised.
 4. **Update the feature article, index, landing-page feature list, changelog.** Not done by
    this pass beyond this file.
+
+---
+
+# Part 2b — wave three: the farm as a business
+
+Ten lanes added livestock, thirty factories, an economy and a hundred-level ladder. What
+follows is what the integrating pass found at the seams and what it did, written from the
+code rather than from the lane reports.
+
+## What was joined up
+
+- **`GameState` grew.** `state.ts` now seeds, clones and hands out `buildings`, `animals`,
+  `machines`, `hay`, `progression`, `market`, `orders`, `loans` and `stall`. Before this
+  pass every one of those was declared in `types.ts` and produced by nobody, so every lane
+  verb threw the moment it read one. `save.ts` reads and writes all nine.
+- **`Tile` gained `buildingId` and `machineId`** — `docs/GAMEPLAY.md` §4 asks for them, and
+  two lanes had been mirroring them onto the tile through a cast that `cloneState` then
+  dropped. They are real fields now, cloned and saved, rebuilt from `state.buildings` and
+  `state.machines` after every placement verb.
+- **`sleep()` runs every overnight pass**, in the order `docs/GAMEPLAY.md` §5 sets out and
+  `docs/ECONOMY.md` implies: crops, then animals, then machines, then the stall, then — on
+  the last night of a season only — interest and the levy, then the calendar, then the
+  market day (decay, the week's event, order expiry, order offers, closing prices). The
+  levy runs *before* the calendar turns so it is assessed against the season that ended and
+  opens the next season's books; everything market-side runs *after*, keyed to the new day.
+- **`DayReport` reports what happened**, not an estimate: `fed`, `unfed`, `produced`,
+  `machinesFinished`, `machinesBlocked`, `animalsUnwell`, `stallSold`, `stallEarned`,
+  `ordersFailed`, `eventBegan`, `interestAccrued`, `tax` and `leveled`. Each is counted by
+  the pass that caused it. `tests/integration.test.ts` simulates a full year and checks
+  every one of them against the state on every one of the 112 nights.
+- **Storage is consulted on every route into the bag.** `addItem` itself now asks
+  `storage.fitCount` before it stacks anything, so no caller can overflow a shelf. On top of
+  that: `harvest` is all-or-nothing and refuses with the store named, leaving the crop
+  standing; `shop.buy` checks the shelf before it takes the gold; a machine holds output the
+  barn will not take and says so in the morning; the stall cannot be pulled down with stock
+  still priced on it.
+- **The two new `ItemRef` variants are handled everywhere.** `itemKey`, `itemName` and
+  `cloneItem` moved into `src/game/items.ts` and cover all five; so do `storeOf`,
+  `marketKey`, `goodCategory`, `shop.sellValue`, `save.readItem`, the renderer's inventory
+  and shop screens, and the Ledger's `itemLabel`.
+- **Clearing pays.** `clearDebris` now rolls `materials.ts`'s drop table, awards the three
+  experience `docs/PROGRESSION.md` §1 publishes, and refuses on ground in a region the
+  player has not bought — which is the loop the contract describes and which nothing had
+  been wired to.
+- **Two buildings do what their catalogue entry says.** Raising the roadside stall opens its
+  six price-it-yourself slots and pulling it down closes them; raising a Barn store adds its
+  hundred to `barnCap` and pulling it down takes it away again. Without the second of those,
+  `expansionTier` read the barn as *below* its base capacity and re-priced every storage
+  extension back to tier one.
+- **The Ledger is a real tab.** `src/shell/ui/ledger.ts` and `pricechart.ts` existed but
+  nothing imported them. `app.ts` now registers a `ledger` panel kind, `tab.ledger` and
+  `cmd.openLedger` are in `strings.ts` in both languages at all five levels, and the panel
+  reads the running farm through a new `state()` on `GameHandle` and `FarmTab` and hands a
+  repayment back through a new `apply()`.
+- **`Market.ledger` is a declared field.** The end-of-season assessor had been writing the
+  season's opening figures through a cast onto a type that did not carry them, and
+  `economy.cloneMarket` dropped them on every daily decay — so the levy was charged against
+  the wrong number from the second day of any season onward.
+
+## Purity — Satisfied
+
+`tests/integration.test.ts` reads every file in `src/game`, strips comments, and fails on
+`Math.random`, `new Date`, `Date.now`, `window.`, `document.`, `performance.now` or
+`localStorage`. Twenty-five modules, no hits. The overnight pass threads one generator from
+`rngFor(state.seed, 'night:…')` through the livestock, stall and order passes, and a year
+replayed from the same seed is byte-identical.
+
+## Quality through the chains — Satisfied
+
+Proved end to end rather than by calling the grading helper: a gold wheat is milled into
+gold flour, the gold flour and a gold egg are baked into gold bread, through real placed
+machines, real queued jobs and real nights slept, and gold bread out-prices normal bread.
+A batch takes exactly one unit of the best grade to set its mark and fills the rest from the
+cheapest stock, so the rest of the player's gold stays theirs.
+
+## Reachability — Satisfied
+
+All thirty factories sit on the ladder at or below level 100 at the level their own
+catalogue entry publishes, `machinesForLevel(100)` returns all thirty, and every input of
+all 195 recipes is something the farm can actually produce — a crop, a tree fruit, an animal
+product, another recipe's output or a material. Checked in `tests/integration.test.ts` as
+well as in `tests/factories.test.ts` and `tests/unlocks.test.ts`.
+
+## What wave three did **not** do
+
+- **`src/shell/ui/farmtab.ts` translates only the wave-one and wave-two game lines.** None
+  of the livestock, placement, production, market or progression messages has a rule, so
+  they render as the raw English the game produces. Two previously covered lines now fall
+  through as well: a cleared rock or log that yields materials, and a harvest that crosses a
+  level, both append a clause the exact-match rules do not carry. That is the documented
+  fallback in that file — "a line the game changes stops being recognised instead of being
+  quietly mistranslated" — but it is a real loss of coverage and it is not fixed here.
+- **The Ledger panel has never been rendered.** It compiles, the renderer build includes it
+  and the tab is registered, but the test environment is `node` and the contract forbids
+  adding a DOM dependency, so nothing has drawn it. Its data functions (`itemLabel`,
+  `calendarOf`, `incomeBySource`) are exercised; its DOM is not.
+- **No new UI-level tests.** The gap recorded at item 6 of Part 3 is unchanged.
+- **Balance is asserted, not played.** `tests/factories.test.ts` checks every recipe clears
+  its inputs by a margin and that deep chains pay better than shallow ones, but nobody has
+  played a year and formed a view on whether winter is survivable or whether the keg is a
+  second-year achievement in practice.
 
 ---
 
@@ -544,7 +656,17 @@ Every item below was found by reading the seams between the twelve lanes.
 
 ## Files the contract protects
 
-`src/game`, `src/engine` and `src/art` are **unmodified**. This was verified against a real
+> **Superseded by wave three.** That wave was explicitly given `src/game`, and the paragraph
+> below now describes only the state of the tree at the end of wave two. Against the wave-two
+> commit, wave three changed `src/game/actions.ts`, `save.ts`, `shop.ts`, `state.ts` and
+> `types.ts`; added `src/game/buildings.ts`, `economy.ts`, `factories.ts`, `farm-types.ts`,
+> `items.ts`, `livestock.ts`, `market.ts`, `materials.ts`, `placement.ts`, `production.ts`,
+> `products.ts`, `progression.ts`, `regions.ts`, `species.ts`, `storage.ts`, `trees.ts` and
+> `unlocks.ts`; added `src/art/goods.ts` for the two new item icons; and changed
+> `src/renderer/main.ts`, `scenes/inventory.ts`, `scenes/shop.ts` and `scenes/sleep.ts`.
+> `src/engine` is still untouched.
+
+`src/game`, `src/engine` and `src/art` were **unmodified at the end of wave two**. This was verified against a real
 baseline rather than asserted: the repository has no commits (`git log` reports
 `your current branch 'main' does not have any commits yet`), so `git diff` could prove
 nothing, but `dist/assets/index-*.js.map` from the pre-shell build carried
@@ -585,8 +707,19 @@ Nothing here is hidden elsewhere in this document; this is the same list, gather
    `titlebar.ts`, `almanac.ts`, `changelog.ts`, `surprise.ts`, `farmtab.ts`, `app.ts` — is
    covered only by the type checker and by reading. The test environment is `node` and the
    contract forbids adding a DOM dependency.
-7. **`README.md`, `CHANGELOG.md` and `docs/ARCHITECTURE.md` were not brought up to date**
-   with the shell by this pass.
+7. **`README.md` and `docs/ARCHITECTURE.md` were not brought up to date.** `CHANGELOG.md`
+   now carries a 1.1.0 entry written from the wave-three code, and `package.json` is at
+   1.1.0. `README.md` still describes the wave-one game (fifteen crops, no animals, no
+   factories, no economy) and `docs/ARCHITECTURE.md` still describes the wave-one module
+   graph and the old `DayReport`. Both are wrong and neither was fixed by this pass.
+13. **`src/shell/ui/farmtab.ts` translates none of the wave-three game lines**, and two
+    lines it used to translate — a cleared rock or log that drops materials, and a harvest
+    that crosses a level — now fall through to raw English because they carry a trailing
+    clause the exact-match rules do not have. See Part 2b.
+14. **The Ledger tab has never been drawn.** It compiles and is registered; no test or run
+    has rendered its DOM. See Part 2b.
+15. **The balance of wave three is asserted, never played.** The margin, depth and
+    reachability checks all pass; nobody has played a year.
 
 **Unverified, honestly:**
 

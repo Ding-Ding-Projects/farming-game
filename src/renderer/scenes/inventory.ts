@@ -5,6 +5,8 @@ import { LOGICAL_W, WORLD_Y } from '../../game/constants'
 import { itemName } from '../../game/state'
 import { selectSeed, setTool } from '../../game/actions'
 import { cropById } from '../../game/crops'
+import { productById } from '../../game/products'
+import { treeById } from '../../game/trees'
 import { sellValue } from '../../game/shop'
 import { PAL } from '../../engine/palette'
 import { drawText, drawTextCentered, textWidth } from '../../engine/font'
@@ -13,6 +15,7 @@ import { playSound } from '../../engine/audio'
 import { mixHex } from '../../art/tiles'
 import { drawSeedIcon, drawProduceIcon } from '../../art/plants'
 import { drawGoodIcon } from '../../art/actors'
+import { drawMaterialIcon, drawProductIcon } from '../../art/goods'
 
 const PANEL_X = 32
 const PANEL_Y = WORLD_Y + 4
@@ -48,7 +51,19 @@ function drawIcon(
     drawGoodIcon(ctx, item.goodId, x, y)
     return
   }
-  const crop = cropById(item.cropId)
+  if (item.kind === 'material') {
+    drawMaterialIcon(ctx, item.materialId, x, y)
+    return
+  }
+  if (item.kind === 'product') {
+    const product = productById(item.productId)
+    if (product === undefined) outline(ctx, x + 2, y + 2, 8, 8, PAL.dusk)
+    else drawProductIcon(ctx, product, item.quality, x, y)
+    return
+  }
+  // Fruit trees share the seed and produce variants with the crops, so both catalogues
+  // are asked before the icon falls back to an empty box.
+  const crop = cropById(item.cropId) ?? treeById(item.cropId)
   if (crop === undefined) {
     outline(ctx, x + 2, y + 2, 8, 8, PAL.dusk)
     return
@@ -60,18 +75,22 @@ function drawIcon(
 function detailNote(item: ItemRef, count: number): string {
   switch (item.kind) {
     case 'seed': {
-      const crop = cropById(item.cropId)
+      const crop = cropById(item.cropId) ?? treeById(item.cropId)
       const seasons = crop === undefined ? '' : crop.seasons.join('/').toUpperCase()
       return `${seasons} SEED - ENTER LOADS IT`
     }
-    case 'produce': {
+    case 'produce':
+    case 'product': {
       const unit = sellValue(item)
+      if (unit <= 0) return `${count} IN THE BAG`
       return `${unit}G EACH - ${unit * count}G THE LOT`
     }
     case 'good':
       return item.goodId === 'sprinkler'
         ? 'ENTER HOLDS IT FOR PLACING'
         : 'ENTER HOLDS IT FOR SPREADING'
+    case 'material':
+      return `${count} IN STOCK - BUILDING AND EXTENDING SPENDS IT`
   }
 }
 
@@ -224,7 +243,12 @@ export function createInventoryScene(): Scene {
           return { kind: 'pop' }
         }
         playSound('deny')
-        ctx.say('PRODUCE SELLS AT THE SHOP - PRESS B.', 'info')
+        ctx.say(
+          item.kind === 'material'
+            ? 'MATERIALS ARE SPENT ON BUILDING, NOT CARRIED.'
+            : 'PRODUCE AND GOODS SELL AT THE SHOP - PRESS B.',
+          'info',
+        )
       }
 
       if (input.pressed('Escape') || input.pressed('KeyI')) return { kind: 'pop' }

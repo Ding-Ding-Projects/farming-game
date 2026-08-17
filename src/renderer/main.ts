@@ -105,6 +105,16 @@ export interface GameHandle {
   isRunning(): boolean
   /** Writes the save now. A no-op before a farm has been started. */
   saveNow(): void
+  /**
+   * The live game state, or null before the farm has finished booting.
+   *
+   * Read-only by contract: the shell's Ledger reads the farm through this and never writes
+   * to it. Mutations go back through `apply`, which is the one door the game's own verbs
+   * come in by, so the loop and the save can never disagree with the panel.
+   */
+  state(): GameState | null
+  /** Applies a state a shell surface produced — a loan repayment from the Ledger. */
+  apply(state: GameState): void
   /** Stops everything, writes the save and removes the canvas. */
   dispose(): void
 }
@@ -213,6 +223,13 @@ export function mount(container: HTMLElement, options: MountOptions = {}): GameH
   const g = back.getContext('2d', { alpha: false })
 
   let surface: Surface | null = null
+  /**
+   * The live scene context, once the farm has booted. The shell reads the game state
+   * through this and hands one back when a shell surface mutates it.
+   */
+  let live: SceneContext | null = null
+  /** Asks the loop to write the save on its next frame. Set once the farm has booted. */
+  let requestSaveNow: (() => void) | null = null
   if (view !== null && g !== null) {
     g.imageSmoothingEnabled = false
     surface = { canvas, view, back, g }
@@ -448,6 +465,7 @@ export function mount(container: HTMLElement, options: MountOptions = {}): GameH
 
     const ctx = new SceneContext(s.g, createState(newSeed()))
     ctx.hasSave = saved !== null
+    live = ctx
 
     /* Every line the game speaks leaves through these two, and only these two. */
     const speak = (raw: string, channel: GameMessageChannel, tone: ToastTone): PresentedMessage => {
@@ -503,6 +521,7 @@ export function mount(container: HTMLElement, options: MountOptions = {}): GameH
     const requestSave = (): void => {
       saveWanted = true
     }
+    requestSaveNow = requestSave
 
     /** The shell's Game setting. A host that does not answer keeps the old behaviour. */
     const autosaveOn = (): boolean => {
@@ -617,6 +636,14 @@ export function mount(container: HTMLElement, options: MountOptions = {}): GameH
 
   return {
     canvas,
+    state(): GameState | null {
+      return live === null ? null : live.state
+    },
+    apply(next: GameState): void {
+      if (live === null) return
+      live.state = next
+      requestSaveNow?.()
+    },
     pause(): void {
       wantRunning = false
       stopLoop()
@@ -660,6 +687,8 @@ export function mount(container: HTMLElement, options: MountOptions = {}): GameH
       observer?.disconnect()
       step = null
       surface = null
+      live = null
+      requestSaveNow = null
       canvas.remove()
     },
   }

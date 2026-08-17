@@ -4,13 +4,16 @@ import { LOGICAL_W, WORLD_Y } from '../../game/constants'
 import { countItem, itemKey, itemName } from '../../game/state'
 import { buy, sell, sellAllProduce, sellValue, shopStock } from '../../game/shop'
 import { cropById } from '../../game/crops'
+import { productById } from '../../game/products'
+import { treeById } from '../../game/trees'
 import { PAL } from '../../engine/palette'
 import { drawText, textWidth } from '../../engine/font'
 import { hline, rect } from '../../engine/pixel'
 import { playSound } from '../../engine/audio'
 import { mixHex } from '../../art/tiles'
-import { drawSeedIcon } from '../../art/plants'
+import { drawProduceIcon, drawSeedIcon } from '../../art/plants'
 import { drawGoodIcon } from '../../art/actors'
+import { drawMaterialIcon, drawProductIcon } from '../../art/goods'
 
 const PANEL_X = 2
 const PANEL_Y = WORLD_Y + 2
@@ -38,12 +41,29 @@ function drawEntryIcon(
   x: number,
   y: number,
 ): void {
-  if (item.kind === 'good') {
-    drawGoodIcon(ctx, item.goodId, x, y)
-    return
+  switch (item.kind) {
+    case 'good':
+      drawGoodIcon(ctx, item.goodId, x, y)
+      return
+    case 'material':
+      drawMaterialIcon(ctx, item.materialId, x, y)
+      return
+    case 'product': {
+      const product = productById(item.productId)
+      if (product !== undefined) drawProductIcon(ctx, product, item.quality, x, y)
+      return
+    }
+    case 'seed': {
+      const crop = cropById(item.cropId) ?? treeById(item.cropId)
+      if (crop !== undefined) drawSeedIcon(ctx, crop, x, y)
+      return
+    }
+    case 'produce': {
+      const crop = cropById(item.cropId) ?? treeById(item.cropId)
+      if (crop !== undefined) drawProduceIcon(ctx, crop, item.quality, x, y)
+      return
+    }
   }
-  const crop = cropById(item.cropId)
-  if (crop !== undefined) drawSeedIcon(ctx, crop, x, y)
 }
 
 function produceTotal(ctx: SceneContext): number {

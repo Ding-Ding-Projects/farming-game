@@ -1925,6 +1925,10 @@ const CORE = {
     en: ['Open the almanac', 'Open the almanac', 'Open the almanac', 'Open the almanac', 'Open the almanac and read up'],
     yue: ['開農民曆', '開農民曆', '開農民曆', '打開農民曆', '打開農民曆，好好研究下'],
   },
+  'cmd.openLedger': {
+    en: ['Open the ledger', 'Open the ledger', 'Open the ledger', 'Open the ledger', 'Open the ledger and face the numbers'],
+    yue: ['開帳簿', '開帳簿', '開帳簿', '打開本帳簿', '打開本帳簿，面對現實'],
+  },
   'cmd.openChangelog': {
     en: ['Open the changelog', 'Open the changelog', 'Open the changelog', 'Open the changelog', 'Open the changelog and see what changed'],
     yue: ['開更新紀錄', '開更新紀錄', '開更新紀錄', '打開更新紀錄', '打開更新紀錄，睇下改咗啲乜'],
@@ -2094,6 +2098,10 @@ const CORE = {
   'tab.surprise': {
     en: ['Surprise', 'Surprise', 'Surprise', 'A surprise', 'A surprise, drawn by hand'],
     yue: ['驚喜', '驚喜', '驚喜', '一個驚喜', '一個驚喜，一筆一筆畫出嚟'],
+  },
+  'tab.ledger': {
+    en: ['Ledger', 'Ledger', 'Ledger', 'The ledger', 'The ledger, where the money tells on you'],
+    yue: ['帳簿', '帳簿', '帳簿', '本帳簿', '本帳簿，錢喺度篤你背脊'],
   },
 
   // =========================================================================
