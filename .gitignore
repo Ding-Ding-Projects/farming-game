@@ -32,3 +32,6 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+
+# Generated application icon (scripts/make-icon.mjs); the generator is the master source
+build/

@@ -15,11 +15,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "package": "npm run build && electron-builder --win squirrel --publish never",
+    "package": "npm run icon && npm run build && electron-builder --win squirrel --publish never",
     "shots": "node scripts/render-shots.mjs",
     "count": "node scripts/count-lines.mjs",
     "check:build": "node scripts/check-build-config.mjs",
-    "dish": "node scripts/dish-name.mjs"
+    "dish": "node scripts/dish-name.mjs",
+    "icon": "node scripts/make-icon.mjs",
+    "check:icon": "node scripts/check-icon.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
@@ -45,9 +47,10 @@
       "target": [
         "squirrel"
       ],
-      "signAndEditExecutable": false,
+      "signAndEditExecutable": true,
       "signExecutable": false,
-      "verifyUpdateCodeSignature": false
+      "verifyUpdateCodeSignature": false,
+      "icon": "build/icon.ico"
     },
     "squirrelWindows": {
       "artifactName": "${productName}-Setup-${version}.${ext}",

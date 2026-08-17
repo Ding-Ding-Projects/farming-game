@@ -38,6 +38,12 @@ jobs:
       - name: Validate the electron-builder configuration
         run: npm run check:build
 
+      # Cheap, and it fails on a broken generator long before a release run would.
+      - name: Generate and validate the application mark
+        run: |
+          npm run icon
+          npm run check:icon
+
       - name: Typecheck
         run: npm run typecheck
 
