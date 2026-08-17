@@ -22,7 +22,9 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      # Whichever attempt actually deployed. The retry below only runs when the first
+      # attempt failed, so exactly one of these is ever set.
+      url: ${{ steps.deploy.outputs.page_url || steps.deploy-retry.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,5 +54,24 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist-site
+      # Creating the deployment is a single API call with no retry inside the action: when
+      # Pages answers 503 the whole run goes red on a build that was otherwise finished.
+      # That is not hypothetical here — three of the last eight runs died that way, on
+      # 503 and on 429, while the commits either side deployed cleanly. So the first
+      # attempt is allowed to fail and a second one runs only if it did.
+      #
+      # Deliberately one retry, not a loop: a second 503 a minute later means Pages is
+      # actually down, and a run that keeps trying for ten minutes reports a real outage
+      # as a slow success. Deliberately no third-party retry action either, for the same
+      # reason configure-pages was dropped above — every action fetched is another thing
+      # that can be rate-limited.
       - id: deploy
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      # No continue-on-error here on purpose: this one is allowed to take the job down.
+      # Two 503s a minute apart is a real outage, and a green run would be a lie.
+      - name: Deploy again if Pages was briefly unavailable
+        id: deploy-retry
+        if: steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4
