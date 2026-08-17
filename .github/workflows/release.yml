@@ -34,22 +34,14 @@ jobs:
             gh release create "$TAG" \
               --draft \
               --title "Sprout Hollow $TAG" \
-              --notes "Desktop builds for Windows, macOS and Linux. The installers are not code-signed."
+              --notes "Windows installer. It is not code-signed, so SmartScreen will warn on first run."
           fi
 
+  # Sprout Hollow is a Windows application. There is deliberately no macOS or
+  # Linux build: shipping a target nobody tests is worse than not shipping it.
   build:
     needs: draft
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            pattern: release/*.exe
-          - os: macos-latest
-            pattern: release/*.dmg
-          - os: ubuntu-latest
-            pattern: release/*.AppImage
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -70,7 +62,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$TAG" ${{ matrix.pattern }} --clobber
+        run: gh release upload "$TAG" release/*.exe --clobber
 
   publish:
     needs: build

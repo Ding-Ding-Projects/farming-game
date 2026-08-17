@@ -11,6 +11,17 @@ Sprout Hollow is built with Electron, TypeScript and Vite. It renders to a singl
 canvas that is upscaled by a whole number to fit your window, so the pixels stay square and
 the edges stay hard.
 
+**Windows only.** There is no macOS or Linux build. The code has no Windows-specific
+dependency and will very likely run on either, but shipping a target nobody tests is worse
+than not shipping it, so only the Windows installer is published.
+
+**[Download the latest release](https://github.com/DingDingChae/sprout-hollow/releases/latest)**
+&nbsp;·&nbsp; [Website](https://dingdingchae.github.io/sprout-hollow/)
+
+The installer is not code-signed, so SmartScreen will warn the first time you run it. Every
+release is built in public by GitHub Actions from the source in this repository, and you can
+[build it yourself](#building-it-yourself) instead.
+
 ## Features
 
 - Four seasons of 28 days each, a day that runs 6:00 AM to 2:00 AM, and a year that turns
@@ -46,7 +57,7 @@ the edges stay hard.
 
 The mouse is optional: every action is reachable from the keyboard.
 
-## Running it
+## Building it yourself
 
 You need Node.js 22 or newer.
 

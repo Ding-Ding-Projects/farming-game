@@ -64,10 +64,9 @@ interface Release {
   assets: ReleaseAsset[]
 }
 
+// Windows only, deliberately. See the release workflow.
 const PLATFORMS = [
   { id: 'win', test: (n: string) => n.endsWith('.exe'), label: 'Installer' },
-  { id: 'mac', test: (n: string) => n.endsWith('.dmg'), label: 'Disk image' },
-  { id: 'linux', test: (n: string) => n.endsWith('.appimage'), label: 'AppImage' },
 ] as const
 
 function megabytes(bytes: number): string {
