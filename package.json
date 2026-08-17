@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "package": "npm run build && electron-builder --win squirrel --publish never",
+    "shots": "node scripts/render-shots.mjs",
     "count": "node scripts/count-lines.mjs",
     "check:build": "node scripts/check-build-config.mjs",
     "dish": "node scripts/dish-name.mjs"
