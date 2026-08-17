@@ -211,6 +211,46 @@ because they are produced by the run that built the release. Reproduce it with
 npm run shots
 ```
 
+<details>
+<summary><strong>The capture matrix — 33 frames, every destination the game has</strong></summary>
+
+Every frame below is produced by `npm run shots` at the committed source, and nothing in
+it is a mock-up. The world and interior frames drive the real art modules; the panel
+frames call the real `scene.update()` against a real save, so a panel that lays out wrongly
+produces a wrong picture and a panel that throws fails the test.
+
+| Surface | Frames |
+|---|---|
+| The farm, through the day | `farm-spring-midday`, `farm-evening`, `farm-night` |
+| Weather and seasons | `farm-rain`, `farm-winter`, `farm-fall-orchard` |
+| Livestock and production | `farm-coop-and-animals`, `farm-machines-working` |
+| Placing a building | `farm-placement-ghost` |
+| Inside a building | `inside-coop`, `inside-barn`, `inside-farmhouse`, `inside-bakery`, `inside-stall`, `inside-mine`, `inside-greenhouse`, `inside-silo` |
+| First screen | `panel-title` |
+| The shop, one per shelf | `panel-shop-stock`, `panel-shop-buildings`, `panel-shop-machines`, `panel-shop-animals`, `panel-shop-land` |
+| The bag | `panel-bag`, `panel-bag-empty` |
+| The order board and the bank | `panel-orders`, `panel-bank`, `panel-orders-empty` |
+| Factory and stall | `panel-machine`, `panel-stall` |
+| A building's occupants | `panel-building-list`, `panel-inside-barn` |
+| Controls | `panel-help` |
+
+Empty states are captured deliberately: `panel-bag-empty` and `panel-orders-empty` are the
+two places a new player lands first, and they are the easiest screens to leave broken.
+
+**What is not here, and why.** There is no light theme, no contrast theme and no narrow
+layout to capture: the game renders one fixed 640 x 448 framebuffer upscaled by whole
+numbers, and `DESIGN.md` binds it to a single palette. There is also no settings surface —
+the options this game has are the reduced-motion preference, which it reads from the
+system, and mute. Capturing them would mean inventing screens that do not exist.
+
+The frames come from the software rasteriser rather than from a photograph of the running
+window. That is not a shortcut, it is the only route that works here: Win32 `PrintWindow`
+returns solid black for any Chromium window, and on a GPU-less off-screen desktop the
+renderer never reaches `dom-ready`, so an automated Electron capture hangs rather than
+failing. The rasteriser drives the same modules the window does, at the same commit.
+
+</details>
+
 Renders real frames into `docs/shots/` and publishes the set to `site/shots/` for the
 website. It is skipped by a normal `npm test`; `SHOTS=1` is what turns it on, and
 `npm run shots` sets that in a way that works on Windows as well as on a POSIX shell.
@@ -226,12 +266,22 @@ implements exactly those nine, drives the **real** drawing modules against a rea
 and rasterises the result into a PNG with nothing but `zlib`. No browser, no GPU, no
 dependencies, and deterministic — the same seed always produces the same image.
 
-It covers the world layer and the interiors. The room shots go through the very same
-`drawRoom` the game calls every frame, against a real `interiorFor` derived from a real save,
-so a picture of a coop that looks wrong is the coop being wrong rather than the picture.
+It covers the world layer, the interiors and every panel. The room shots go through the very
+same `drawRoom` the game calls every frame, against a real `interiorFor` derived from a real
+save, so a picture of a coop that looks wrong is the coop being wrong rather than the picture.
 
-The HUD and tool belt are drawn by the scene layer, which needs a live input and UI instance,
-so the frames are cropped to the world band rather than faking chrome that would not be real.
+The panels go one layer further up and run the real `scene.update()`. That turned out to need
+very little: scenes read a handful of `Input` methods, the immediate-mode `UI` holds no DOM
+reference at all, and the two things that would normally need a browser already fail safe —
+`playSound` returns immediately when no `AudioContext` exists, and `prefersReducedMotion`
+guards `matchMedia` behind a `typeof` check. A panel that sits over the farm is captured with
+the farm drawn underneath, the way the scene stack really works.
+
+It earned its keep immediately. Capturing the shop one shelf at a time produced two frames
+that were byte-identical, which is how the LAND shelf was found to be unreachable from the
+keyboard — the tab cycle was still modulo four after a fifth shelf was added — and the frame
+after that showed the fifth tab running off the panel edge and through the row counter. Both
+are fixed, and both were invisible to a test suite that only ever asked whether the code ran.
 
 ## License
 
