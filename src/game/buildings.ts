@@ -36,6 +36,11 @@ export const BUILDINGS: readonly BuildingDef[] = [
     // building, and so the upgrade chain has a root.
     kind: 'farmhouse',
     name: 'FARMHOUSE',
+    // 4x4 to match `big-farmhouse`, because `tests/buildings.test.ts` requires an upgrade
+    // to keep its footprint so it can land in place. This is deliberately NOT the geometry
+    // the valley uses: `placement.FARMHOUSE` reserves 3x3 at (1,0) and `art/scenery.ts`
+    // draws 3x3. Entering the house therefore takes its door from the placement constant,
+    // never from here -- see tests/farmhouse.test.ts, which records the disagreement.
     footprint: { w: 4, h: 4 },
     cost: 0,
     materials: {},

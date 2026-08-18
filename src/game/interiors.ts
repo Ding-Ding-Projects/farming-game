@@ -28,7 +28,7 @@ import {
   petAnimal,
 } from './livestock'
 import { machineDefFor, machineStatus } from './production'
-import { footprintOf } from './placement'
+import { FARMHOUSE, footprintOf } from './placement'
 import { speciesById } from './species'
 
 /* ------------------------------------------------------------------ the room */
@@ -245,7 +245,10 @@ function pushStation(list: Station[], s: Station): void {
  * stall slots, all of which are small.
  */
 export function interiorFor(state: GameState, buildingId: string): Interior | null {
-  const building = state.buildings.find((b) => b.id === buildingId)
+  const building =
+    buildingId === FARMHOUSE_ID
+      ? farmhouseBuilding()
+      : state.buildings.find((b) => b.id === buildingId)
   if (building === undefined) return null
 
   const def = buildingDef(building.kind)
@@ -547,8 +550,38 @@ export function doorOf(building: Building): { x: number; y: number } {
   return { x: building.x + Math.floor(w / 2), y: building.y + h - 1 }
 }
 
+/**
+ * The house the farmer already lives in.
+ *
+ * It stands on day one and is drawn as part of the valley rather than placed by the
+ * player, so it is not in `state.buildings` — and `buildingDoorAt` only ever looked
+ * there. That made the farmhouse the one building nobody could walk into: it has a room
+ * in `INTERIOR_ROOMS`, a case in `interiorFor`, a bed and a kitchen, and a screenshot in
+ * the README, and pressing the use button at its door did nothing at all.
+ *
+ * Its geometry comes from `placement.FARMHOUSE` rather than from the catalogue, because
+ * those two disagree — the catalogue says 4x4 while the art, the reserved tiles and the
+ * doorstep all say 3x3 at (1,0). `tests/farmhouse.test.ts` holds them to the same answer.
+ */
+export const FARMHOUSE_ID = 'farmhouse'
+
+/** The farmhouse as a `Building`, so every interior verb can treat it like any other. */
+export function farmhouseBuilding(): Building {
+  return { id: FARMHOUSE_ID, kind: 'farmhouse', x: FARMHOUSE.x, y: FARMHOUSE.y }
+}
+
+/** The tile a farmer faces to go in: the bottom-centre of the house, above the doorstep. */
+export function farmhouseDoorTile(): { x: number; y: number } {
+  return {
+    x: FARMHOUSE.x + Math.floor(FARMHOUSE.w / 2),
+    y: FARMHOUSE.y + FARMHOUSE.h - 1,
+  }
+}
+
 /** The building whose door is on this farm tile, or null. */
 export function buildingDoorAt(state: GameState, x: number, y: number): Building | null {
+  const house = farmhouseDoorTile()
+  if (x === house.x && y === house.y) return farmhouseBuilding()
   for (const b of state.buildings) {
     const d = doorOf(b)
     if (d.x === x && d.y === y) return b

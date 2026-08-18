@@ -1,14 +1,32 @@
-import { app, BrowserWindow, ipcMain, session, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, session, shell } from 'electron'
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 import { runCapture, wantsCapture } from './capture'
 
-/** 4x the 320x224 logical framebuffer, and 2x as the floor. */
-const WINDOW_W = 1280
-const WINDOW_H = 896
-const MIN_W = 640
-const MIN_H = 448
+/**
+ * The default window, sized so the farm actually gets to draw at 2x.
+ *
+ * The farm upscales by whole numbers only, so it takes the largest integer that fits and
+ * drops straight from 2x to 1x the moment it is one pixel short. This window used to be
+ * exactly 1280x896 -- 2x the 640x448 framebuffer -- which would have been right if the
+ * game were the whole window. It is not: the shell puts a title bar, a tab strip and a
+ * status line inside that content box, and they are 32, 40 and 25 pixels tall. The farm
+ * panel was therefore 1280x801, 801 is not 896, and the game rendered at 1x in the middle
+ * of a very large black field.
+ *
+ * So the height is the framebuffer at 2x plus that chrome, with a little slack, and the
+ * whole thing is clamped to the work area further down for a screen too small to hold it.
+ */
+// The main process compiles with its own rootDir and cannot import from `src`, so the
+// framebuffer is mirrored here. `tests/window-size.test.ts` fails if the two ever differ.
+const LOGICAL_W = 640
+const LOGICAL_H = 448
+const CHROME_H = 97
+const WINDOW_W = LOGICAL_W * 2
+const WINDOW_H = LOGICAL_H * 2 + CHROME_H + 8
+const MIN_W = LOGICAL_W
+const MIN_H = LOGICAL_H + CHROME_H
 
 /** PAL.ink — the letterbox colour, so the window never flashes white. */
 const INK = '#1b1a24'
@@ -131,10 +149,32 @@ function windowIcon(): string | undefined {
   return fs.existsSync(candidate) ? candidate : undefined
 }
 
+/**
+ * The default size, never larger than the screen it opens on.
+ *
+ * The window wants to be tall enough for the farm at 2x. On a laptop that is shorter than
+ * that, asking for it anyway would put the status line under the taskbar, so it is clamped
+ * to the work area and the farm simply draws at 1x — which is the honest outcome on a
+ * screen with no room, rather than a window running off the bottom.
+ */
+function defaultBounds(): { width: number; height: number } {
+  try {
+    const work = screen.getPrimaryDisplay().workAreaSize
+    return {
+      width: Math.min(WINDOW_W, Math.max(MIN_W, work.width)),
+      height: Math.min(WINDOW_H, Math.max(MIN_H, work.height)),
+    }
+  } catch {
+    // No display information available; the requested size is still a reasonable default.
+    return { width: WINDOW_W, height: WINDOW_H }
+  }
+}
+
 function createWindow(): void {
+  const bounds = defaultBounds()
   const win = new BrowserWindow({
-    width: WINDOW_W,
-    height: WINDOW_H,
+    width: bounds.width,
+    height: bounds.height,
     minWidth: MIN_W,
     minHeight: MIN_H,
     useContentSize: true,

@@ -20,6 +20,7 @@ import type { StationState } from '../../art/interiors'
 import type { Scene, SceneCommand, SceneContext } from '../scene'
 import { FARM_H, LOGICAL_H, LOGICAL_W, TILE, WORLD_Y } from '../../game/constants'
 import {
+  FARMHOUSE_ID,
   entryPoint,
   interiorFor,
   isFloor,
@@ -289,16 +290,30 @@ export function createInteriorScene(buildingId: string): Scene {
       /* ---- managing the building you are standing in -------------------- */
       demolishArmed = Math.max(0, demolishArmed - dt)
 
+      // The farmhouse is part of the valley rather than something the player put up: it
+      // is not in `state.buildings`, so moving or pulling it down would act on an id
+      // nothing owns. Refuse plainly here rather than letting the placement layer fail
+      // with a message about a building it cannot find.
+      const isHome = interior.buildingId === FARMHOUSE_ID
+
       if (input.pressed('KeyM')) {
-        // Moving needs a tile to move to, which only exists outside, so this arms the
-        // farm's own placing mode and walks the player back out to use it.
-        armBuildingMove(interior.buildingId, interior.kind)
-        playSound('select')
-        ctx.say(`PICK A NEW PLACE FOR THE ${interior.name}.`, 'good')
-        command = { kind: 'pop' }
+        if (isHome) {
+          playSound('deny')
+          ctx.say('THE FARMHOUSE STAYS WHERE IT IS.', 'bad')
+        } else {
+          // Moving needs a tile to move to, which only exists outside, so this arms the
+          // farm's own placing mode and walks the player back out to use it.
+          armBuildingMove(interior.buildingId, interior.kind)
+          playSound('select')
+          ctx.say(`PICK A NEW PLACE FOR THE ${interior.name}.`, 'good')
+          command = { kind: 'pop' }
+        }
       }
 
-      if (input.pressed('KeyX')) {
+      if (input.pressed('KeyX') && isHome) {
+        playSound('deny')
+        ctx.say('YOU ARE NOT PULLING DOWN YOUR OWN HOUSE.', 'bad')
+      } else if (input.pressed('KeyX')) {
         const plan = demolishPlan(ctx.state, interior.buildingId)
         if (!plan.ok) {
           playSound('deny')
