@@ -15,8 +15,12 @@
  * catalogue publishes agrees with the geometry the valley actually uses.
  */
 import { describe, it, expect } from 'vitest'
-import { createState } from '../src/game/state'
-import { FARMHOUSE, FARMHOUSE_DOOR } from '../src/game/placement'
+import { createState, facingIndex } from '../src/game/state'
+import { FARMHOUSE, FARMHOUSE_DOOR, tilesOf } from '../src/game/placement'
+import { movePlayer } from '../src/game/actions'
+import { FARM_W } from '../src/game/constants'
+import type { Building } from '../src/game/farm-types'
+import type { GameState } from '../src/game/types'
 import { buildingDef } from '../src/game/buildings'
 import {
   FARMHOUSE_ID,
@@ -112,5 +116,52 @@ describe('the farmhouse', () => {
       y: FARMHOUSE.y + def.footprint.h - 1,
     }
     expect(fromCatalogue, 'the catalogue would put the door out of reach').not.toEqual(door)
+  })
+})
+
+describe('buildings are solid', () => {
+  /**
+   * A door only means something if you cannot walk through the wall beside it.
+   *
+   * `isWalkable` answers about the ground alone — water, rock, log — and that is the right
+   * question for `placement.ts`, which asks it when deciding whether a tile could host a
+   * building. Movement asked only that, so the farmer walked through every coop, barn and
+   * bakery, and through the farmhouse. That is what made the door decorative: you never
+   * had to stand at one, so you never pressed use at one.
+   */
+  it('stops the farmer walking into the farmhouse', () => {
+    let state = createState(12345)
+    // Start (4,2) -> down to row 3, then left twice to the doorstep at (2,3).
+    state = movePlayer(state, 0, 1)
+    state = movePlayer(state, -1, 0)
+    state = movePlayer(state, -1, 0)
+    expect({ x: state.player.x, y: state.player.y }).toEqual({ x: FARMHOUSE_DOOR.x, y: FARMHOUSE_DOOR.y })
+
+    // Pressing up turns the farmer to face the house but must not walk into it.
+    const after = movePlayer(state, 0, -1)
+    expect(after.player.facing).toBe('up')
+    expect(
+      { x: after.player.x, y: after.player.y },
+      'the farmer walked through the wall',
+    ).toEqual({ x: FARMHOUSE_DOOR.x, y: FARMHOUSE_DOOR.y })
+
+    // And what they are now facing is the way in.
+    const index = facingIndex(after)
+    const found = buildingDoorAt(after, index % FARM_W, Math.floor(index / FARM_W))
+    expect(found?.id).toBe(FARMHOUSE_ID)
+  })
+
+  it('stops the farmer walking into a placed building', () => {
+    const base = createState(999)
+    const coop: Building = { id: 'b1', kind: 'coop', x: 6, y: 6 }
+    const state: GameState = { ...base, buildings: [coop], player: { x: 6, y: 8, facing: 'up' } }
+    for (const index of tilesOf(coop)) {
+      const tile = state.tiles[index]
+      if (tile !== undefined) tile.buildingId = coop.id
+    }
+
+    // Standing directly below the coop's bottom row and stepping up must be refused.
+    const moved = movePlayer({ ...state, player: { x: 6, y: 8, facing: 'up' } }, 0, -1)
+    expect({ x: moved.player.x, y: moved.player.y }).toEqual({ x: 6, y: 8 })
   })
 })

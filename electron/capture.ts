@@ -121,6 +121,22 @@ async function press(win: BrowserWindow, keyCode: string, times = 1): Promise<vo
   }
 }
 
+/**
+ * Holds a key down for a while, then releases it.
+ *
+ * Movement reads *held* keys — `world.ts` asks `input.down('ArrowLeft')` every frame — so
+ * a keyDown immediately followed by a keyUp can pass between two frames and move nobody.
+ * That is why the farm frames in this script showed a farmer who had not walked anywhere:
+ * every movement step was a tap. One tile takes `MOVE_MS` (180ms), so the default here is
+ * comfortably longer than that.
+ */
+async function hold(win: BrowserWindow, keyCode: string, ms = 420): Promise<void> {
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode })
+  await sleep(ms)
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode })
+  await sleep(220)
+}
+
 /** Drives the game through a short scripted session, photographing as it goes. */
 export async function runCapture(win: BrowserWindow, argv: readonly string[]): Promise<void> {
   const dir = outputDir(argv)
@@ -184,8 +200,8 @@ export async function runCapture(win: BrowserWindow, argv: readonly string[]): P
   await sleep(2500)
   await shot(win, dir, '03-farm')
 
-  await press(win, 'Right', 2)
-  await press(win, 'Down')
+  await hold(win, 'Right', 700)
+  await hold(win, 'Down')
   await sleep(600)
   await shot(win, dir, '04-farm-walked')
 

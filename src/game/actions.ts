@@ -40,6 +40,7 @@ import { absoluteDay, dailyRecovery, eventBeginsToday, recordPrices, refreshEven
 import { cutGrass, nightlyLivestock } from './livestock'
 import { accrueInterest, expireOrders, nightlyStall, offerOrders, seasonalTax, totalDebt } from './market'
 import { clearingSource, rollMaterials } from './materials'
+import { isFarmhouseTile } from './placement'
 import { nightlyProduction } from './production'
 import {
   addMaterials,
@@ -122,6 +123,27 @@ function debrisCost(ground: Ground): number {
  * Facing always updates, even when the step is blocked, so the farmer can turn on
  * the spot to work an adjacent tile. Free in both energy and time.
  */
+/**
+ * A tile the farmer may stand on.
+ *
+ * Clear ground is not enough: a building is solid. `isWalkable` answers only about the
+ * ground — it is also what `placement.ts` asks when deciding whether a tile could host a
+ * building, so it must stay a question about the ground alone — and movement never asked
+ * anything else. The farmer therefore walked straight through every coop, barn and
+ * bakery on the farm, and through the farmhouse, which is what made a door decorative:
+ * you never had to stand at one, so you never pressed use at one.
+ *
+ * The farmhouse is checked by position rather than by `buildingId`, because it is drawn
+ * as part of the valley and owns no tiles.
+ */
+function canWalkTo(state: GameState, x: number, y: number): boolean {
+  if (!inBounds(x, y)) return false
+  const tile = state.tiles[tileIndex(x, y)]
+  if (tile === undefined || !isWalkable(tile)) return false
+  if (tile.buildingId !== null) return false
+  return !isFarmhouseTile(x, y)
+}
+
 export function movePlayer(state: GameState, dx: number, dy: number): GameState {
   const sx = Math.sign(dx)
   const sy = sx !== 0 ? 0 : Math.sign(dy)
@@ -130,7 +152,7 @@ export function movePlayer(state: GameState, dx: number, dy: number): GameState 
   const facing: Facing = sx !== 0 ? (sx < 0 ? 'left' : 'right') : sy < 0 ? 'up' : 'down'
   const tx = state.player.x + sx
   const ty = state.player.y + sy
-  const walkable = inBounds(tx, ty) && isWalkable(state.tiles[tileIndex(tx, ty)])
+  const walkable = canWalkTo(state, tx, ty)
 
   if (!walkable && state.player.facing === facing) return state
 

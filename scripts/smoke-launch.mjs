@@ -94,13 +94,23 @@ if (electron === null) {
 console.log(`Electron: ${electron}`)
 
 console.log(`Launching the application, writing frames to ${out}`)
-const run = spawnSync(electron, ['.', '--capture', `--capture-out=${out}`], {
-  cwd: root,
-  encoding: 'utf8',
-  timeout: 180_000,
-  // A hung renderer must not hang the build; the timeout above is the real guard.
-  killSignal: 'SIGKILL',
-})
+// A clean profile per run. Without it the app finds whatever save this machine happens
+// to hold, CONTINUE lights up, and the scripted session loads someone's half-played farm
+// instead of starting a new one — which is both non-deterministic and, the first time it
+// happened here, quietly wrong in a way that looked like a real failure. It also means a
+// smoke run never touches the player's own save.
+const profile = path.join(out, 'profile')
+const run = spawnSync(
+  electron,
+  ['.', '--capture', `--capture-out=${out}`, `--user-data-dir=${profile}`],
+  {
+    cwd: root,
+    encoding: 'utf8',
+    timeout: 180_000,
+    // A hung renderer must not hang the build; the timeout above is the real guard.
+    killSignal: 'SIGKILL',
+  },
+)
 
 if (run.stdout) process.stdout.write(run.stdout)
 if (run.stderr) process.stderr.write(run.stderr)
